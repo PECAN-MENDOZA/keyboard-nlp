@@ -61,6 +61,8 @@ import dev.patrickgold.florisboard.app.settings.clipboard.ClipboardScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.DictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryType
+import dev.patrickgold.florisboard.app.settings.accessibility.AccessibilityScreen
+import dev.patrickgold.florisboard.app.settings.education.EducationScreen
 import dev.patrickgold.florisboard.app.settings.gestures.GesturesScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.InputFeedbackScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.KeyboardScreen
@@ -147,6 +149,14 @@ object Routes {
         @Serializable
         @Deeplink("settings/smartbar")
         object Smartbar
+
+        @Serializable
+        @Deeplink("settings/education")
+        object Education
+
+        @Serializable
+        @Deeplink("settings/accessibility")
+        object Accessibility
 
         @Serializable
         @Deeplink("settings/typing")
@@ -299,6 +309,10 @@ object Routes {
             composableWithDeepLink(Settings.InputFeedback::class) { InputFeedbackScreen() }
 
             composableWithDeepLink(Settings.Smartbar::class) { SmartbarScreen() }
+
+            composableWithDeepLink(Settings.Education::class) { EducationScreen() }
+
+            composableWithDeepLink(Settings.Accessibility::class) { AccessibilityScreen() }
 
             composableWithDeepLink(Settings.Typing::class) { TypingScreen() }
 

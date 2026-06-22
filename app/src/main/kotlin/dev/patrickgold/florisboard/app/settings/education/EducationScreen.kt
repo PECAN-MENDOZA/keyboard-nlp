@@ -50,7 +50,6 @@ import dev.patrickgold.florisboard.education.EducationalCorrectionState
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.jetpref.datastore.ui.PreferenceGroup
-import dev.patrickgold.jetpref.datastore.ui.SwitchPreference
 import org.florisboard.lib.compose.stringRes
 
 @Composable
@@ -68,24 +67,6 @@ fun EducationScreen() = FlorisScreen {
         var username by remember { mutableStateOf("") }
         var pin by remember { mutableStateOf("") }
         var pinVisible by remember { mutableStateOf(false) }
-
-        PreferenceGroup(title = stringRes(R.string.accessibility__group__title)) {
-            SwitchPreference(
-                prefs.accessibility.dyslexiaFont,
-                title = stringRes(R.string.accessibility__dyslexia_font__label),
-                summary = stringRes(R.string.accessibility__dyslexia_font__summary),
-            )
-            SwitchPreference(
-                prefs.accessibility.highContrastKeyboard,
-                title = stringRes(R.string.accessibility__high_contrast__label),
-                summary = stringRes(R.string.accessibility__high_contrast__summary),
-            )
-            SwitchPreference(
-                prefs.accessibility.bigKeys,
-                title = stringRes(R.string.accessibility__big_keys__label),
-                summary = stringRes(R.string.accessibility__big_keys__summary),
-            )
-        }
 
         PreferenceGroup(title = "Corrección IA") {
             Column(

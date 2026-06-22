@@ -18,14 +18,10 @@ package dev.patrickgold.florisboard.app.settings
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Assignment
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Gesture
+import androidx.compose.material.icons.filled.Accessibility
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.SentimentSatisfiedAlt
-import androidx.compose.material.icons.filled.SmartButton
 import androidx.compose.material.icons.filled.Spellcheck
-import androidx.compose.material.icons.outlined.Build
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Keyboard
 import androidx.compose.material.icons.outlined.Palette
@@ -120,40 +116,23 @@ fun HomeScreen() = FlorisScreen {
             title = stringRes(R.string.settings__keyboard__title),
             onClick = { navController.navigate(Routes.Settings.Keyboard) },
         )
+        // Menu enfocado en la tesis: se ocultan las secciones del teclado generico
+        // (Smartbar, Gestos, Portapapeles, Multimedia, Extensiones, Otros) que no aportan
+        // al caso de uso del alumno. Las rutas siguen existiendo, solo no se muestran aqui.
         Preference(
-            icon = Icons.Default.SmartButton,
-            title = stringRes(R.string.settings__smartbar__title),
-            onClick = { navController.navigate(Routes.Settings.Smartbar) },
+            icon = Icons.Default.School,
+            title = stringRes(R.string.settings__education__title),
+            onClick = { navController.navigate(Routes.Settings.Education) },
+        )
+        Preference(
+            icon = Icons.Default.Accessibility,
+            title = stringRes(R.string.accessibility__group__title),
+            onClick = { navController.navigate(Routes.Settings.Accessibility) },
         )
         Preference(
             icon = Icons.Default.Spellcheck,
             title = stringRes(R.string.settings__typing__title),
             onClick = { navController.navigate(Routes.Settings.Typing) },
-        )
-        Preference(
-            icon = Icons.Default.Gesture,
-            title = stringRes(R.string.settings__gestures__title),
-            onClick = { navController.navigate(Routes.Settings.Gestures) },
-        )
-        Preference(
-            icon = Icons.AutoMirrored.Outlined.Assignment,
-            title = stringRes(R.string.settings__clipboard__title),
-            onClick = { navController.navigate(Routes.Settings.Clipboard) },
-        )
-        Preference(
-            icon = Icons.Default.SentimentSatisfiedAlt,
-            title = stringRes(R.string.settings__media__title),
-            onClick = { navController.navigate(Routes.Settings.Media) },
-        )
-        Preference(
-            icon = Icons.Default.Extension,
-            title = stringRes(R.string.ext__home__title),
-            onClick = { navController.navigate(Routes.Ext.Home) },
-        )
-        Preference(
-            icon = Icons.Outlined.Build,
-            title = stringRes(R.string.settings__other__title),
-            onClick = { navController.navigate(Routes.Settings.Other) },
         )
         Preference(
             icon = Icons.Outlined.Info,
