@@ -25,9 +25,11 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontFamily
 import androidx.core.view.WindowCompat
 import dev.patrickgold.florisboard.app.AppTheme
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.OpenDyslexicFontFamily
 import dev.patrickgold.jetpref.datastore.model.collectAsState
 import org.florisboard.lib.color.neutralDynamicColorScheme
 import org.florisboard.lib.color.systemAccentOrDefault
@@ -72,6 +74,12 @@ fun FlorisAppTheme(
 ) {
     val colors = getColorScheme(theme = theme)
 
+    val prefs by FlorisPreferenceStore
+    val useDyslexiaFont by prefs.accessibility.dyslexiaFont.collectAsState()
+    val typography = florisTypography(
+        if (useDyslexiaFont) OpenDyslexicFontFamily else FontFamily.Default,
+    )
+
     val darkTheme =
         theme == AppTheme.DARK
             || theme == AppTheme.AMOLED_DARK
@@ -88,7 +96,7 @@ fun FlorisAppTheme(
 
     MaterialTheme(
         colorScheme = colors,
-        typography = Typography,
+        typography = typography,
         content = content,
     )
 }

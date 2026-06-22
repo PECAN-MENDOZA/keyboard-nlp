@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021-2025 The FlorisBoard Contributors
+ * Copyright (C) 2026 The FlorisBoard Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,20 +14,15 @@
  * limitations under the License.
  */
 
-package dev.patrickgold.florisboard.app.apptheme
+package dev.patrickgold.florisboard.education
 
-import androidx.compose.material3.Typography
-import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.sp
+import dev.patrickgold.florisboard.R
 
-// Set of Material typography styles to start with. The font family is parameterized so the
-// accessibility option can swap in OpenDyslexic for the whole settings app.
-fun florisTypography(fontFamily: FontFamily = FontFamily.Default) = Typography(
-    bodyLarge = TextStyle(
-        fontFamily = fontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-    ),
+/** Familia de fuente OpenDyslexic (OFL), para la opcion de accesibilidad. */
+val OpenDyslexicFontFamily: FontFamily = FontFamily(
+    Font(R.font.opendyslexic_regular, FontWeight.Normal),
+    Font(R.font.opendyslexic_bold, FontWeight.Bold),
 )

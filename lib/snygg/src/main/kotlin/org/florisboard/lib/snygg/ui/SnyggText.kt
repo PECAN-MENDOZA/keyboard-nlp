@@ -19,6 +19,7 @@ package org.florisboard.lib.snygg.ui
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -31,6 +32,12 @@ import androidx.compose.ui.unit.sp
 import org.florisboard.lib.snygg.SnyggQueryAttributes
 import org.florisboard.lib.snygg.SnyggSelector
 import org.florisboard.lib.snygg.SnyggStylesheet
+
+/**
+ * If non-null, forces this font family on every [SnyggText], ignoring the stylesheet's. Used by the
+ * accessibility option to apply OpenDyslexic to the keyboard and the correction sheet.
+ */
+val LocalSnyggForcedFontFamily = compositionLocalOf<FontFamily?> { null }
 
 /**
  * Simple text composable, which displays the given [text].
@@ -69,7 +76,8 @@ fun SnyggText(
             fontSize = style.fontSize(),
             fontStyle = style.fontStyle(),
             fontWeight = style.fontWeight(),
-            fontFamily = style.fontFamily(LocalSnyggPreloadedCustomFontFamilies.current),
+            fontFamily = LocalSnyggForcedFontFamily.current
+                ?: style.fontFamily(LocalSnyggPreloadedCustomFontFamilies.current),
             letterSpacing = style.letterSpacing(),
             lineHeight = style.lineHeight(),
             textAlign = style.textAlign(),

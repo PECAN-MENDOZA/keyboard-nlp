@@ -27,10 +27,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.OpenDyslexicFontFamily
 import dev.patrickgold.florisboard.ime.window.LocalWindowController
 import dev.patrickgold.florisboard.keyboardManager
 import dev.patrickgold.florisboard.themeManager
 import dev.patrickgold.jetpref.datastore.model.collectAsState
+import org.florisboard.lib.snygg.ui.LocalSnyggForcedFontFamily
 import org.florisboard.lib.snygg.ui.ProvideSnyggTheme
 import org.florisboard.lib.snygg.ui.rememberSnyggTheme
 
@@ -44,6 +46,8 @@ fun FlorisImeTheme(content: @Composable () -> Unit) {
 
     val prefs by FlorisPreferenceStore
     val accentColor by prefs.theme.accentColor.collectAsState()
+    val useDyslexiaFont by prefs.accessibility.dyslexiaFont.collectAsState()
+    val forcedFontFamily = if (useDyslexiaFont) OpenDyslexicFontFamily else null
 
     val activeThemeInfo by themeManager.activeThemeInfo.collectAsState()
 
@@ -70,7 +74,12 @@ fun FlorisImeTheme(content: @Composable () -> Unit) {
                 fontSizeMultiplier = fontScale,
                 assetResolver = assetResolver,
                 rootAttributes = attributes,
-                content = content,
+                content = {
+                    CompositionLocalProvider(
+                        LocalSnyggForcedFontFamily provides forcedFontFamily,
+                        content = content,
+                    )
+                },
                 materialYouFlags = activeThemeInfo.config.materialYouFlags
             )
         }
