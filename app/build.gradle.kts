@@ -78,6 +78,11 @@ configure<ApplicationExtension> {
         buildConfigField("String", "BUILD_COMMIT_HASH", "\"${getGitCommitHash().get()}\"")
         buildConfigField("String", "FLADDONS_API_VERSION", "\"v~draft2\"")
         buildConfigField("String", "FLADDONS_STORE_URL", "\"beta.addons.florisboard.org\"")
+        buildConfigField(
+            "String",
+            "EDUCATION_BACKEND_BASE_URL",
+            "\"https://backend-887695300669.us-central1.run.app/api/v1\"",
+        )
 
         sourceSets {
             maybeCreate("main").apply {
@@ -144,6 +149,7 @@ configure<ApplicationExtension> {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            isReturnDefaultValues = true
         }
         unitTests.all {
             it.useJUnitPlatform()
