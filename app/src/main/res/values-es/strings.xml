@@ -416,6 +416,16 @@
     <string name="pref__keyboard__space_bar_switches_to_characters__label" comment="Preference title">La barra espaciadora cambia a caracteres</string>
     <string name="pref__keyboard__space_bar_switches_to_characters__summary" comment="Preference summary">Automáticamente regresa a los caracteres al estar en teclado numérico o de símbolos</string>
     <string name="pref__keyboard__incognito_indicator__label" comment="Preference title">Indicador de incógnito</string>
+    <!-- Education strings -->
+    <string name="settings__education__title" comment="Title of the educational AI correction settings screen">Educación</string>
+    <string name="accessibility__group__title">Accesibilidad</string>
+    <string name="accessibility__dyslexia_font__label">Fuente para dislexia</string>
+    <string name="accessibility__dyslexia_font__summary">Letras más fáciles de leer (OpenDyslexic).</string>
+    <string name="accessibility__high_contrast__label">Alto contraste</string>
+    <string name="accessibility__high_contrast__summary">Teclado con colores de máximo contraste.</string>
+    <string name="accessibility__big_keys__label">Teclas grandes</string>
+    <string name="accessibility__big_keys__summary">Teclas y letras más grandes para escribir mejor.</string>
+
     <!-- Smartbar strings -->
     <string name="settings__smartbar__title" comment="Title of Smartbar screen">Barra inteligente</string>
     <string name="pref__smartbar__enabled__label" comment="Preference title">Barra inteligente</string>
