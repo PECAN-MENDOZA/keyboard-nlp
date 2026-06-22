@@ -195,3 +195,22 @@ private fun SuggestionOptionContent(
         }
     }
 }
+
+@Composable
+fun OnboardingHintSheet(onDismiss: () -> Unit) {
+    SnyggColumn(
+        elementName = PanelElement,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Heading("Cómo corregir")
+            SnyggText(text = "Sombrea el texto con el dedo y toca el botón IA para corregir.")
+            PrimaryButton(text = "Entendido", onClick = onDismiss)
+        }
+    }
+}

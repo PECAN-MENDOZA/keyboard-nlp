@@ -370,6 +370,7 @@ class FlorisImeService : LifecycleInputMethodService() {
         flogInfo { "restarting=$restarting info=${info?.debugSummarize()}" }
         super.onStartInputView(info, restarting)
         educationalCorrectionManager.prewarm()
+        educationalCorrectionManager.maybeShowOnboarding()
         if (info == null) return
         val editorInfo = FlorisEditorInfo.wrap(info)
         activeState.batchEdit {

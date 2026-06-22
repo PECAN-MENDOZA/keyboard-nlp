@@ -19,6 +19,7 @@ package dev.patrickgold.florisboard.education
 import android.content.Context
 import android.os.SystemClock
 import dev.patrickgold.florisboard.BuildConfig
+import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.editorInstance
 import dev.patrickgold.florisboard.keyboardManager
 import java.net.ConnectException
@@ -38,7 +39,11 @@ class EducationalCorrectionManager(context: Context) {
     private val repository = EducationalApiRepository()
     private val sessionStore = SecureEducationalSessionStore(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val prefs by FlorisPreferenceStore
     private var lastPrewarmAtMs: Long = 0L
+
+    private val _onboardingHint = MutableStateFlow(false)
+    val onboardingHint: StateFlow<Boolean> = _onboardingHint
 
     private val _state = MutableStateFlow<EducationalCorrectionState>(EducationalCorrectionState.Idle)
     val state: StateFlow<EducationalCorrectionState> = _state
@@ -92,6 +97,18 @@ class EducationalCorrectionManager(context: Context) {
         if (now - lastPrewarmAtMs < PREWARM_DEBOUNCE_MS) return
         lastPrewarmAtMs = now
         checkBackendConnection()
+    }
+
+    /** Muestra una sola vez la pista de uso, tras el primer login. */
+    fun maybeShowOnboarding() {
+        if (_session.value == null) return
+        if (prefs.accessibility.onboardingHintShown.get()) return
+        _onboardingHint.value = true
+    }
+
+    fun dismissOnboarding() {
+        _onboardingHint.value = false
+        scope.launch { prefs.accessibility.onboardingHintShown.set(true) }
     }
 
     fun login(username: String, password: String) {
