@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.AccessibilityPreset
 import dev.patrickgold.florisboard.ime.nlp.NlpInlineAutofill
 import dev.patrickgold.florisboard.ime.smartbar.ExtendedActionsPlacement
 import dev.patrickgold.florisboard.ime.smartbar.InlineSuggestionsChipMargin
@@ -130,6 +131,10 @@ fun ProvideKeyboardRowBaseHeight(content: @Composable () -> Unit) {
     }
     val (rowHeight, smartbarRowHeight) = heights
 
+    val prefs by FlorisPreferenceStore
+    val bigKeys by prefs.accessibility.bigKeys.collectAsState()
+    val effectiveRowHeight = AccessibilityPreset.effectiveRowHeight(rowHeight, bigKeys)
+
     SideEffect {
         val marginV = InlineSuggestionsChipMargin.calculateTopPadding() +
             InlineSuggestionsChipMargin.calculateBottomPadding()
@@ -139,7 +144,7 @@ fun ProvideKeyboardRowBaseHeight(content: @Composable () -> Unit) {
     }
 
     CompositionLocalProvider(
-        LocalKeyboardRowBaseHeight provides rowHeight,
+        LocalKeyboardRowBaseHeight provides effectiveRowHeight,
         LocalSmartbarHeight provides smartbarRowHeight,
     ) {
         content()

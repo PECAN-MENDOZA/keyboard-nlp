@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.AccessibilityPreset
 import dev.patrickgold.florisboard.education.OpenDyslexicFontFamily
 import dev.patrickgold.florisboard.ime.window.LocalWindowController
 import dev.patrickgold.florisboard.keyboardManager
@@ -57,6 +58,8 @@ fun FlorisImeTheme(content: @Composable () -> Unit) {
     val snyggTheme = rememberSnyggTheme(activeThemeInfo.stylesheet, assetResolver)
     val windowSpec by windowController.activeWindowSpec.collectAsState()
     val fontScale by remember { derivedStateOf { windowSpec.fontScale } }
+    val bigKeys by prefs.accessibility.bigKeys.collectAsState()
+    val effectiveFontScale = AccessibilityPreset.effectiveFontScale(fontScale, bigKeys)
 
     val state by keyboardManager.activeState.collectAsState()
     val attributes = mapOf(
@@ -71,7 +74,7 @@ fun FlorisImeTheme(content: @Composable () -> Unit) {
             ProvideSnyggTheme(
                 snyggTheme = snyggTheme,
                 dynamicAccentColor = accentColor,
-                fontSizeMultiplier = fontScale,
+                fontSizeMultiplier = effectiveFontScale,
                 assetResolver = assetResolver,
                 rootAttributes = attributes,
                 content = {
