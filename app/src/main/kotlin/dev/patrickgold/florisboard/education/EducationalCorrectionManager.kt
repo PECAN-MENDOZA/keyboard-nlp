@@ -55,10 +55,24 @@ class EducationalCorrectionManager(context: Context) {
 
     // Sesion cacheada en memoria. El descifrado con Keystore + lectura de disco solo ocurre una
     // vez (al construir el manager), no en cada recomposicion ni en cada peticion de correccion.
-    private val _session = MutableStateFlow(sessionStore.load())
+    // Una sesion guardada que ya vencio se descarta y borra de entrada (no cuenta como activa).
+    private val _session = MutableStateFlow(loadValidSession())
     val session: StateFlow<EducationalSession?> = _session
 
-    fun currentSession(): EducationalSession? = _session.value
+    private val _isLoggingIn = MutableStateFlow(false)
+    val isLoggingIn: StateFlow<Boolean> = _isLoggingIn
+
+    private fun loadValidSession(): EducationalSession? {
+        val stored = sessionStore.load() ?: return null
+        if (stored.isExpired()) {
+            sessionStore.clear()
+            return null
+        }
+        return stored
+    }
+
+    /** Sesion utilizable: no nula y no vencida. Null significa "hay que iniciar sesion". */
+    fun currentSession(): EducationalSession? = _session.value?.takeUnless { it.isExpired() }
 
     private fun persistSession(newSession: EducationalSession) {
         sessionStore.save(newSession)
@@ -112,10 +126,12 @@ class EducationalCorrectionManager(context: Context) {
     }
 
     fun login(username: String, password: String) {
+        if (_isLoggingIn.value) return
         if (username.isBlank() || password.isBlank()) {
             _state.value = EducationalCorrectionState.Message("Ingresa alias y PIN.")
             return
         }
+        _isLoggingIn.value = true
         _state.value = EducationalCorrectionState.Message("Iniciando sesión...")
         scope.launch {
             val result = EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
@@ -127,10 +143,11 @@ class EducationalCorrectionManager(context: Context) {
             }
             result.onSuccess { session ->
                 persistSession(session)
-                _state.value = EducationalCorrectionState.Message("Sesión educativa iniciada.")
+                _state.value = EducationalCorrectionState.Message("Sesión iniciada.")
             }.onFailure { error ->
                 _state.value = EducationalCorrectionState.Message(error.toUiMessage())
             }
+            _isLoggingIn.value = false
         }
     }
 

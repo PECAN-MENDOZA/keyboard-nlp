@@ -44,8 +44,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import dev.patrickgold.florisboard.R
-import dev.patrickgold.florisboard.education.EducationalBackendBaseUrls
-import dev.patrickgold.florisboard.education.EducationalBackendConnectionState
 import dev.patrickgold.florisboard.education.EducationalCorrectionState
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
@@ -61,8 +59,10 @@ fun EducationScreen() = FlorisScreen {
         val context = LocalContext.current
         val educationalCorrectionManager by context.educationalCorrectionManager()
         val state by educationalCorrectionManager.state.collectAsState()
-        val connectionState by educationalCorrectionManager.connectionState.collectAsState()
         val session by educationalCorrectionManager.session.collectAsState()
+        val isLoggingIn by educationalCorrectionManager.isLoggingIn.collectAsState()
+        // Una sesion vencida no cuenta como activa: hay que iniciar sesion de nuevo.
+        val activeSession = session?.takeUnless { it.isExpired() }
 
         var username by remember { mutableStateOf("") }
         var pin by remember { mutableStateOf("") }
@@ -74,19 +74,9 @@ fun EducationScreen() = FlorisScreen {
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                Text("Backend desplegado: ${EducationalBackendBaseUrls.first()}")
-                Text("Estado: ${connectionState.statusText()}")
-                Spacer(Modifier.height(8.dp))
                 Text(
                     "Para corregir: sombrea el texto con el dedo y toca el botón IA del teclado.",
                 )
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = educationalCorrectionManager::checkBackendConnection,
-                    enabled = connectionState !is EducationalBackendConnectionState.Checking,
-                ) {
-                    Text("Probar conexión")
-                }
             }
         }
 
@@ -97,7 +87,8 @@ fun EducationScreen() = FlorisScreen {
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Text(
-                    text = session?.let { "Sesión activa: ${it.userId}" } ?: "Sin sesión educativa.",
+                    text = activeSession?.let { "Sesión activa: ${it.userId}" }
+                        ?: "Sin sesión. Inicia sesión para usar la corrección.",
                 )
                 Spacer(Modifier.height(12.dp))
                 OutlinedTextField(
@@ -143,13 +134,14 @@ fun EducationScreen() = FlorisScreen {
                         educationalCorrectionManager.login(username, pin)
                         pin = ""
                     },
+                    enabled = !isLoggingIn,
                 ) {
-                    Text("Iniciar sesión")
+                    Text(if (isLoggingIn) "Iniciando sesión..." else "Iniciar sesión")
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = educationalCorrectionManager::logout,
-                    enabled = session != null,
+                    enabled = activeSession != null,
                 ) {
                     Text("Cerrar sesión")
                 }
@@ -159,14 +151,5 @@ fun EducationScreen() = FlorisScreen {
                 }
             }
         }
-    }
-}
-
-private fun EducationalBackendConnectionState.statusText(): String {
-    return when (this) {
-        EducationalBackendConnectionState.Unknown -> "No verificado"
-        EducationalBackendConnectionState.Checking -> "Probando conexión..."
-        is EducationalBackendConnectionState.Connected -> "Conectado a $baseUrl"
-        is EducationalBackendConnectionState.Unavailable -> message
     }
 }
