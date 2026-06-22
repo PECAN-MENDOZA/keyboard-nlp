@@ -24,6 +24,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.absoluteOffset
@@ -33,11 +34,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.UnfoldLess
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +61,8 @@ import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.EducationalCorrectionState
+import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.ime.keyboard.FlorisImeSizing
 import dev.patrickgold.florisboard.ime.nlp.NlpInlineAutofill
 import dev.patrickgold.florisboard.ime.smartbar.quickaction.QuickActionButton
@@ -71,10 +77,12 @@ import org.florisboard.lib.android.AndroidVersion
 import org.florisboard.lib.compose.horizontalTween
 import org.florisboard.lib.compose.verticalTween
 import org.florisboard.lib.snygg.ui.SnyggBox
+import org.florisboard.lib.snygg.ui.SnyggButton
 import org.florisboard.lib.snygg.ui.SnyggColumn
 import org.florisboard.lib.snygg.ui.SnyggIcon
 import org.florisboard.lib.snygg.ui.SnyggIconButton
 import org.florisboard.lib.snygg.ui.SnyggRow
+import org.florisboard.lib.snygg.ui.SnyggText
 import org.florisboard.lib.snygg.ui.rememberSnyggThemeQuery
 
 const val AnimationDuration = 200
@@ -278,6 +286,35 @@ private fun SmartbarMainRow(modifier: Modifier = Modifier) {
     }
 
     @Composable
+    fun EducationalCorrectionButton() {
+        val educationalCorrectionManager by context.educationalCorrectionManager()
+        val correctionState by educationalCorrectionManager.state.collectAsState()
+        val isProcessing = correctionState is EducationalCorrectionState.Processing
+        SnyggButton(
+            elementName = FlorisImeUi.SmartbarActionKey.elementName,
+            onClick = educationalCorrectionManager::requestCorrection,
+            enabled = !isProcessing,
+            modifier = Modifier
+                .padding(horizontal = 4.dp)
+                .sizeIn(maxHeight = FlorisImeSizing.smartbarHeight)
+                .aspectRatio(1f),
+            contentPadding = PaddingValues(0.dp),
+        ) {
+            if (isProcessing) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                )
+            } else {
+                SnyggIcon(
+                    imageVector = Icons.Default.AutoFixHigh,
+                    contentDescription = "Corregir con IA",
+                )
+            }
+        }
+    }
+
+    @Composable
     fun StickyAction() {
         val actionArrangement by prefs.smartbar.actionArrangement.collectAsState()
         val evaluator by keyboardManager.activeSmartbarEvaluator.collectAsState()
@@ -324,18 +361,20 @@ private fun SmartbarMainRow(modifier: Modifier = Modifier) {
     ) {
         when (smartbarLayout) {
             SmartbarLayout.SUGGESTIONS_ONLY -> {
+                EducationalCorrectionButton()
                 if (shouldShowInlineSuggestionsUi) {
-                    InlineSuggestionsUi(inlineSuggestions)
+                    InlineSuggestionsUi(inlineSuggestions, Modifier.weight(1f))
                 } else {
-                    CandidatesRow()
+                    CandidatesRow(Modifier.weight(1f))
                 }
             }
 
             SmartbarLayout.ACTIONS_ONLY -> {
+                EducationalCorrectionButton()
                 if (shouldShowInlineSuggestionsUi) {
-                    InlineSuggestionsUi(inlineSuggestions)
+                    InlineSuggestionsUi(inlineSuggestions, Modifier.weight(1f))
                 } else {
-                    QuickActionsRow(FlorisImeUi.SmartbarSharedActionsRow.elementName)
+                    QuickActionsRow(FlorisImeUi.SmartbarSharedActionsRow.elementName, Modifier.weight(1f))
                 }
             }
 
@@ -343,9 +382,11 @@ private fun SmartbarMainRow(modifier: Modifier = Modifier) {
                 if (!flipToggles) {
                     SharedActionsToggle()
                     CenterContent()
+                    EducationalCorrectionButton()
                     StickyAction()
                 } else {
                     StickyAction()
+                    EducationalCorrectionButton()
                     CenterContent()
                     SharedActionsToggle()
                 }
@@ -355,9 +396,11 @@ private fun SmartbarMainRow(modifier: Modifier = Modifier) {
                 if (!flipToggles) {
                     ExtendedActionsToggle()
                     CenterContent()
+                    EducationalCorrectionButton()
                     StickyAction()
                 } else {
                     StickyAction()
+                    EducationalCorrectionButton()
                     CenterContent()
                     ExtendedActionsToggle()
                 }
