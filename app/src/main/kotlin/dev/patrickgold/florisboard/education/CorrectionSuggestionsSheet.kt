@@ -107,7 +107,7 @@ private fun PrimaryButton(
 private fun ProcessingContent() {
     Heading("Corrección IA")
     SnyggText(text = "Estamos revisando tu texto...")
-    SnyggText(text = "La primera vez puede tardar unos segundos.")
+    SnyggText(text = "La primera vez puede tardar hasta un minuto.")
 }
 
 @Composable
