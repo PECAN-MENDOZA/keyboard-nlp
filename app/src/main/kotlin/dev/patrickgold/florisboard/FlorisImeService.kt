@@ -261,6 +261,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     private val nlpManager by nlpManager()
     private val subtypeManager by subtypeManager()
     private val themeManager by themeManager()
+    private val educationalCorrectionManager by educationalCorrectionManager()
 
     val windowController = ImeWindowController(prefs, lifecycleScope)
 
@@ -368,6 +369,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         flogInfo { "restarting=$restarting info=${info?.debugSummarize()}" }
         super.onStartInputView(info, restarting)
+        educationalCorrectionManager.prewarm()
         if (info == null) return
         val editorInfo = FlorisEditorInfo.wrap(info)
         activeState.batchEdit {
