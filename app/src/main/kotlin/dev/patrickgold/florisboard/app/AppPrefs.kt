@@ -176,6 +176,26 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
     }
 
+    val accessibility = Accessibility()
+    inner class Accessibility {
+        val dyslexiaFont = boolean(
+            key = "accessibility__dyslexia_font",
+            default = false,
+        )
+        val highContrastKeyboard = boolean(
+            key = "accessibility__high_contrast_keyboard",
+            default = false,
+        )
+        val bigKeys = boolean(
+            key = "accessibility__big_keys",
+            default = false,
+        )
+        val onboardingHintShown = boolean(
+            key = "accessibility__onboarding_hint_shown",
+            default = false,
+        )
+    }
+
     val devtools = Devtools()
     inner class Devtools {
         val enabled = boolean(
