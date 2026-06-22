@@ -34,6 +34,7 @@ import androidx.core.graphics.ColorUtils
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.appContext
+import dev.patrickgold.florisboard.education.AccessibilityPreset
 import dev.patrickgold.florisboard.extensionManager
 import dev.patrickgold.florisboard.ime.smartbar.CachedInlineSuggestionsChipStyleSet
 import dev.patrickgold.florisboard.lib.devtools.flogInfo
@@ -102,6 +103,7 @@ class ThemeManager(context: Context) {
             prefs.theme.mode.asFlow(),
             prefs.theme.dayThemeId.asFlow(),
             prefs.theme.nightThemeId.asFlow(),
+            prefs.accessibility.highContrastKeyboard.asFlow(),
             previewThemeId,
             previewThemeInfo,
             configurationChangeCounter,
@@ -162,6 +164,9 @@ class ThemeManager(context: Context) {
 
     private fun evaluateActiveThemeName(): ExtensionComponentName {
         previewThemeId.value?.let { return it }
+        if (prefs.accessibility.highContrastKeyboard.get()) {
+            return extCoreTheme(AccessibilityPreset.HIGH_CONTRAST_THEME_ID)
+        }
         return when (prefs.theme.mode.get()) {
             ThemeMode.ALWAYS_DAY -> {
                 prefs.theme.dayThemeId.get()

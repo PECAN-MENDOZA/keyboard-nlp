@@ -44,6 +44,12 @@
       "label": "Floris Pure Night (Borderless)",
       "authors": [ "serebit" ],
       "isNight": true
+    },
+    {
+      "id": "floris_high_contrast",
+      "label": "Alto contraste (accesibilidad)",
+      "authors": [ "tesis" ],
+      "isNight": true
     }
   ]
 }
