@@ -69,3 +69,6 @@ result
 target/
 **/*.rs.bk
 *.pdb
+
+# Documentacion interna del proyecto (se mantiene solo local, no se sube)
+docs/

@@ -36,10 +36,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
-import dev.patrickgold.florisboard.app.devtools.AndroidLocalesScreen
-import dev.patrickgold.florisboard.app.devtools.AndroidSettingsScreen
-import dev.patrickgold.florisboard.app.devtools.DevtoolsScreen
-import dev.patrickgold.florisboard.app.devtools.ExportDebugLogScreen
 import dev.patrickgold.florisboard.app.ext.CheckUpdatesScreen
 import dev.patrickgold.florisboard.app.ext.ExtensionEditScreen
 import dev.patrickgold.florisboard.app.ext.ExtensionExportScreen
@@ -211,24 +207,6 @@ object Routes {
         object ThirdPartyLicenses
     }
 
-    object Devtools {
-        @Serializable
-        @Deeplink("devtools")
-        object Home
-
-        @Serializable
-        @Deeplink("devtools/android/locales")
-        object AndroidLocales
-
-        @Serializable
-        @Deeplink("devtools/android/settings")
-        data class AndroidSettings(val name: String)
-
-        @Serializable
-        @Deeplink("export-debug-log")
-        object ExportDebugLog
-    }
-
     object Ext {
         @Serializable
         @Deeplink("ext")
@@ -336,14 +314,6 @@ object Routes {
             composableWithDeepLink(Settings.About::class) { AboutScreen() }
             composableWithDeepLink(Settings.ProjectLicense::class) { ProjectLicenseScreen() }
             composableWithDeepLink(Settings.ThirdPartyLicenses::class) { ThirdPartyLicensesScreen() }
-
-            composableWithDeepLink(Devtools.Home::class) { DevtoolsScreen() }
-            composableWithDeepLink(Devtools.AndroidLocales::class) { AndroidLocalesScreen() }
-            composableWithDeepLink(Devtools.AndroidSettings::class) { navBackStack ->
-                val payload = navBackStack.toRoute<Devtools.AndroidSettings>()
-                AndroidSettingsScreen(payload.name)
-            }
-            composableWithDeepLink(Devtools.ExportDebugLog::class) { ExportDebugLogScreen() }
 
             composableWithDeepLink(Ext.Home::class) { ExtensionHomeScreen() }
             composableWithDeepLink(Ext.List::class) { navBackStack ->

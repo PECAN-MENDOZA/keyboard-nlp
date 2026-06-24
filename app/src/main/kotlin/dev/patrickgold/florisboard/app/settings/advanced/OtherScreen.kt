@@ -17,7 +17,6 @@
 package dev.patrickgold.florisboard.app.settings.advanced
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Adb
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.FormatColorFill
 import androidx.compose.material.icons.filled.Language
@@ -160,11 +159,6 @@ fun OtherScreen() = FlorisScreen {
             icon = ImageVector.vectorResource(R.drawable.ic_keyboard_keys),
             title = stringRes(R.string.physical_keyboard__title),
             onClick = { navController.navigate(Routes.Settings.PhysicalKeyboard) },
-        )
-        Preference(
-            icon = Icons.Default.Adb,
-            title = stringRes(R.string.devtools__title),
-            onClick = { navController.navigate(Routes.Devtools.Home) },
         )
 
         PreferenceGroup(title = stringRes(R.string.backup_and_restore__title)) {

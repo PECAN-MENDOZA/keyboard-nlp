@@ -27,6 +27,7 @@ import android.util.Log
 import androidx.core.os.UserManagerCompat
 import dev.patrickgold.florisboard.app.FlorisPreferenceModel
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.EducationalCorrectionManager
 import dev.patrickgold.florisboard.ime.clipboard.ClipboardManager
 import dev.patrickgold.florisboard.ime.core.SubtypeManager
 import dev.patrickgold.florisboard.ime.dictionary.DictionaryManager
@@ -76,6 +77,7 @@ class FlorisApplication : Application() {
     val cacheManager = lazy { CacheManager(this) }
     val clipboardManager = lazy { ClipboardManager(this) }
     val editorInstance = lazy { EditorInstance(this) }
+    val educationalCorrectionManager = lazy { EducationalCorrectionManager(this) }
     val extensionManager = lazy { ExtensionManager(this) }
     val glideTypingManager = lazy { GlideTypingManager(this) }
     val keyboardManager = lazy { KeyboardManager(this) }
@@ -160,6 +162,8 @@ fun Context.cacheManager() = this.florisApplication().cacheManager
 fun Context.clipboardManager() = this.florisApplication().clipboardManager
 
 fun Context.editorInstance() = this.florisApplication().editorInstance
+
+fun Context.educationalCorrectionManager() = this.florisApplication().educationalCorrectionManager
 
 fun Context.extensionManager() = this.florisApplication().extensionManager
 

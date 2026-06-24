@@ -238,6 +238,20 @@ class EditorInstance(context: Context) : AbstractEditorInstance(context) {
         }
     }
 
+    fun replaceRangeIfUnchanged(
+        range: EditorRange,
+        expectedText: String,
+        replacement: String,
+    ): Boolean {
+        if (activeInfo.isRawInputEditor || range.isNotValid) return false
+        val content = activeContent
+        if (content.offset < 0) return false
+        val localRange = range.translatedBy(-content.offset)
+        if (localRange.isNotValid || localRange.end > content.text.length) return false
+        if (content.text.substring(localRange.start, localRange.end) != expectedText) return false
+        return setSelection(range.start, range.end) && commitText(replacement)
+    }
+
     /**
      * Completes the given [candidate] in the current composing region. Does nothing if the current
      * input editor is not rich or if the input connection is invalid.
