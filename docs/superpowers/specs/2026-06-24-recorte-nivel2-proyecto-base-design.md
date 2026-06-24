@@ -36,16 +36,19 @@ temas, entrada/feedback, editor, ventana IME, popups, ciclo de vida, NLP).
    - **Conservar**: el wrapper básico del portapapeles del sistema dentro de `ClipboardManager`
      del que dependen las teclas copiar/cortar/pegar. El copiar/pegar del sistema sigue funcionando.
 
-3. **Gestos / Glide typing (eliminación DIRIGIDA)**
-   - Eliminar: el clasificador de escritura por deslizamiento (glide) en `ime/text/gestures/`
-     y la pantalla `app/settings/gestures/GesturesScreen.kt` con su ruta.
-   - **Conservar**: los swipes básicos de entrada (borrar deslizando, mover cursor en la barra
-     espaciadora) para no romper la interacción del teclado.
+3. **Gestos / Glide typing (REVISADO tras descubrimiento — solo pantalla de ajustes)**
+   - Eliminar: únicamente la pantalla `app/settings/gestures/GesturesScreen.kt` y su ruta
+     (huérfana, sin navegación entrante).
+   - **NO eliminar el código de glide.** El detector `GlideTypingGesture.Detector` está acoplado
+     al controlador del teclado y comparte teclas con los swipes básicos; borrarlo implica refactor
+     del núcleo y el glide ya está desactivado por defecto (beneficio casi nulo, riesgo real).
+     Decisión del usuario: conservar el código de glide tal cual (desactivado).
 
-4. **Gestión de extensiones (UI)**
-   - Eliminar: pantallas `app/ext/` (`Home`, `List`, `Edit`, `View`, `Import`, `Export`,
-     `CheckUpdates`) y sus rutas.
-   - **Conservar**: `lib/ext/` (framework de carga de temas y teclados integrados).
+4. **Gestión de extensiones (UI) — FUERA DE ALCANCE (revisado tras descubrimiento)**
+   - Decisión del usuario: **no tocar Extensiones.** Las pantallas `Ext.Import/View/Export/Edit`
+     y el componente `AddonBox` los usan la pantalla de Temas y el gestor de paquetes de idioma
+     (ambos conservados) para importar temas e idiomas, y `FlorisAppActivity` las usa para abrir
+     archivos `.flex`. Eliminarlas rompería funciones que conservamos.
 
 5. **Devtools / depuración**
    - Eliminar: pantallas `app/devtools/` (`DevtoolsScreen`, `AndroidLocales`, `AndroidSettings`,
@@ -74,8 +77,9 @@ roturas. Por cada módulo:
    de la Smartbar, proveedores de sugerencias NLP, y preferencias en `AppPrefs.kt`.
 4. Recompilar (`gradlew assembleDebug`) y corregir referencias rotas antes de continuar.
 
-**Orden (de menor a mayor riesgo):**
-Devtools → Config Smartbar → Extensiones UI → Gestos/Glide → Emoji/Multimedia → Portapapeles (historial).
+**Orden (de menor a mayor riesgo, alcance revisado):**
+Devtools → Pantallas de ajustes huérfanas (Smartbar/Media/Clipboard/Gestures) → Emoji/Multimedia
+→ Portapapeles (historial). Extensiones y el código de glide quedan fuera del recorte.
 
 ## Riesgos y mitigaciones
 
