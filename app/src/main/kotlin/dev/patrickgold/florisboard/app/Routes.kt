@@ -53,13 +53,11 @@ import dev.patrickgold.florisboard.app.settings.advanced.BackupScreen
 import dev.patrickgold.florisboard.app.settings.advanced.OtherScreen
 import dev.patrickgold.florisboard.app.settings.advanced.PhysicalKeyboardScreen
 import dev.patrickgold.florisboard.app.settings.advanced.RestoreScreen
-import dev.patrickgold.florisboard.app.settings.clipboard.ClipboardScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.DictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryType
 import dev.patrickgold.florisboard.app.settings.accessibility.AccessibilityScreen
 import dev.patrickgold.florisboard.app.settings.education.EducationScreen
-import dev.patrickgold.florisboard.app.settings.gestures.GesturesScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.InputFeedbackScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.KeyboardScreen
 import dev.patrickgold.florisboard.app.settings.localization.LanguagePackManagerScreen
@@ -67,8 +65,6 @@ import dev.patrickgold.florisboard.app.settings.localization.LanguagePackManager
 import dev.patrickgold.florisboard.app.settings.localization.LocalizationScreen
 import dev.patrickgold.florisboard.app.settings.localization.SelectLocaleScreen
 import dev.patrickgold.florisboard.app.settings.localization.SubtypeEditorScreen
-import dev.patrickgold.florisboard.app.settings.media.MediaScreen
-import dev.patrickgold.florisboard.app.settings.smartbar.SmartbarScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeManagerScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeManagerScreenAction
 import dev.patrickgold.florisboard.app.settings.theme.ThemeScreen
@@ -143,10 +139,6 @@ object Routes {
         object InputFeedback
 
         @Serializable
-        @Deeplink("settings/smartbar")
-        object Smartbar
-
-        @Serializable
         @Deeplink("settings/education")
         object Education
 
@@ -165,18 +157,6 @@ object Routes {
         @Serializable
         @Deeplink("settings/dictionary/user-dictionary")
         data class UserDictionary(val type: UserDictionaryType)
-
-        @Serializable
-        @Deeplink("settings/gestures")
-        object Gestures
-
-        @Serializable
-        @Deeplink("settings/clipboard")
-        object Clipboard
-
-        @Serializable
-        @Deeplink("settings/media")
-        object Media
 
         @Serializable
         @Deeplink("settings/other")
@@ -286,8 +266,6 @@ object Routes {
             composableWithDeepLink(Settings.Keyboard::class) { KeyboardScreen() }
             composableWithDeepLink(Settings.InputFeedback::class) { InputFeedbackScreen() }
 
-            composableWithDeepLink(Settings.Smartbar::class) { SmartbarScreen() }
-
             composableWithDeepLink(Settings.Education::class) { EducationScreen() }
 
             composableWithDeepLink(Settings.Accessibility::class) { AccessibilityScreen() }
@@ -299,12 +277,6 @@ object Routes {
                 val payload = navBackStack.toRoute<Settings.UserDictionary>()
                 UserDictionaryScreen(payload.type)
             }
-
-            composableWithDeepLink(Settings.Gestures::class) { GesturesScreen() }
-
-            composableWithDeepLink(Settings.Clipboard::class) { ClipboardScreen() }
-
-            composableWithDeepLink(Settings.Media::class) { MediaScreen() }
 
             composableWithDeepLink(Settings.Other::class) { OtherScreen() }
             composableWithDeepLink(Settings.PhysicalKeyboard::class) { PhysicalKeyboardScreen() }
