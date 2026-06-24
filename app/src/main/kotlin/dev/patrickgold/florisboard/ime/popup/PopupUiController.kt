@@ -37,7 +37,6 @@ import dev.patrickgold.florisboard.ime.keyboard.Key
 import dev.patrickgold.florisboard.ime.keyboard.KeyData
 import dev.patrickgold.florisboard.ime.keyboard.computeImageVector
 import dev.patrickgold.florisboard.ime.keyboard.computeLabel
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiSet
 import dev.patrickgold.florisboard.ime.text.key.KeyCode
 import dev.patrickgold.florisboard.ime.text.key.KeyHintConfiguration
 import dev.patrickgold.florisboard.ime.text.keyboard.TextKey
@@ -64,7 +63,6 @@ val ExceptionsForKeyCodes = listOf(
     KeyCode.ENTER,
     KeyCode.LANGUAGE_SWITCH,
     KeyCode.IME_UI_MODE_TEXT,
-    KeyCode.IME_UI_MODE_MEDIA,
     KeyCode.IME_UI_MODE_CLIPBOARD,
     KeyCode.KANA_SWITCHER,
     KeyCode.CHAR_WIDTH_SWITCHER,
@@ -404,11 +402,11 @@ class PopupUiController(
     }
 
     /**
-     * Gets the [EmojiSet] of the currently active key. May be either the key of the popup
-     * preview or one of the keys in extended popup, if shown. Returns null if [key] is noz a subclass of [EmojiKey].
+     * Gets the emoji key data of the currently active key. May be either the key of the popup
+     * preview or one of the keys in extended popup, if shown. Returns null if [key] is not a subclass of EmojiKey.
      *
      * @param key Reference to the key currently controlling the popup.
-     * @return The [EmojiSet] object of the currently active key or null.
+     * @return The emoji key data of the currently active key or null.
      */
     fun getActiveEmojiKeyData(key: Key): KeyData? {
         return null

@@ -28,8 +28,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -95,8 +101,10 @@ import dev.patrickgold.florisboard.ime.ImeUiMode
 import dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardFileStorage
 import dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardItem
 import dev.patrickgold.florisboard.ime.clipboard.provider.ItemType
+import dev.patrickgold.florisboard.ime.input.InputEventDispatcher
+import dev.patrickgold.florisboard.ime.input.LocalInputFeedbackController
 import dev.patrickgold.florisboard.ime.keyboard.FlorisImeSizing
-import dev.patrickgold.florisboard.ime.media.KeyboardLikeButton
+import dev.patrickgold.florisboard.ime.keyboard.KeyData
 import dev.patrickgold.florisboard.ime.smartbar.AnimationDuration
 import dev.patrickgold.florisboard.ime.smartbar.VerticalEnterTransition
 import dev.patrickgold.florisboard.ime.smartbar.VerticalExitTransition
@@ -120,6 +128,7 @@ import org.florisboard.lib.compose.florisVerticalScroll
 import org.florisboard.lib.compose.rippleClickable
 import org.florisboard.lib.compose.stringRes
 import org.florisboard.lib.snygg.SnyggQueryAttributes
+import org.florisboard.lib.snygg.SnyggSelector
 import org.florisboard.lib.snygg.ui.SnyggBox
 import org.florisboard.lib.snygg.ui.SnyggButton
 import org.florisboard.lib.snygg.ui.SnyggChip
@@ -762,5 +771,53 @@ private fun PopupAction(
             modifier = Modifier.weight(1f),
             text = text,
         )
+    }
+}
+
+@Composable
+private fun KeyboardLikeButton(
+    inputEventDispatcher: InputEventDispatcher,
+    keyData: KeyData,
+    elementName: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val inputFeedbackController = LocalInputFeedbackController.current
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val selector = if (isPressed) {
+        SnyggSelector.PRESSED
+    } else {
+        SnyggSelector.NONE
+    }
+
+    SnyggBox(
+        elementName = elementName,
+        attributes = mapOf(FlorisImeUi.Attr.Code to keyData.code),
+        selector = selector,
+        clickAndSemanticsModifier = modifier
+            .indication(interactionSource, ripple())
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false).also {
+                        if (it.pressed != it.previousPressed) it.consume()
+                    }
+                    val press = PressInteraction.Press(down.position)
+                    interactionSource.tryEmit(press)
+                    inputEventDispatcher.sendDown(keyData)
+                    inputFeedbackController.keyPress(keyData)
+                    val up = waitForUpOrCancellation()
+                    if (up != null) {
+                        interactionSource.tryEmit(PressInteraction.Release(press))
+                        inputEventDispatcher.sendUp(keyData)
+                    } else {
+                        interactionSource.tryEmit(PressInteraction.Cancel(press))
+                        inputEventDispatcher.sendCancel(keyData)
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
     }
 }

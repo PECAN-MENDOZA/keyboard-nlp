@@ -30,9 +30,6 @@ import dev.patrickgold.florisboard.ime.keyboard.IncognitoMode
 import dev.patrickgold.florisboard.ime.keyboard.KeyboardMode
 import dev.patrickgold.florisboard.ime.keyboard.SpaceBarMode
 import dev.patrickgold.florisboard.ime.landscapeinput.LandscapeInputUiMode
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiHistory
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiSkinTone
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiSuggestionType
 import dev.patrickgold.florisboard.ime.nlp.SpellingLanguageMode
 import dev.patrickgold.florisboard.ime.smartbar.CandidatesDisplayMode
 import dev.patrickgold.florisboard.ime.smartbar.ExtendedActionsPlacement
@@ -186,90 +183,6 @@ private val ENUM_DISPLAY_ENTRIES = mapOf<Pair<KClass<*>, String>, @Composable ()
                 label = stringRes(R.string.enum__display_language_names_in__native_locale),
                 description = stringRes(R.string.enum__display_language_names_in__native_locale__description),
                 showDescriptionOnlyIfSelected = true,
-            )
-        }
-    },
-    EmojiHistory.UpdateStrategy::class to DEFAULT to {
-        listPrefEntries {
-            entry(
-                key = EmojiHistory.UpdateStrategy.AUTO_SORT_PREPEND,
-                label = stringRes(R.string.enum__emoji_history_update_strategy__auto_sort_prepend),
-                description = stringRes(R.string.enum__emoji_history_update_strategy__auto_sort_prepend__description),
-            )
-            entry(
-                key = EmojiHistory.UpdateStrategy.AUTO_SORT_APPEND,
-                label = stringRes(R.string.enum__emoji_history_update_strategy__auto_sort_append),
-                description = stringRes(R.string.enum__emoji_history_update_strategy__auto_sort_append__description),
-            )
-            entry(
-                key = EmojiHistory.UpdateStrategy.MANUAL_SORT_PREPEND,
-                label = stringRes(R.string.enum__emoji_history_update_strategy__manual_sort_prepend),
-                description = stringRes(R.string.enum__emoji_history_update_strategy__manual_sort_prepend__description),
-            )
-            entry(
-                key = EmojiHistory.UpdateStrategy.MANUAL_SORT_APPEND,
-                label = stringRes(R.string.enum__emoji_history_update_strategy__manual_sort_append),
-                description = stringRes(R.string.enum__emoji_history_update_strategy__manual_sort_append__description),
-            )
-        }
-    },
-    EmojiSkinTone::class to DEFAULT to {
-        listPrefEntries {
-            entry(
-                key = EmojiSkinTone.DEFAULT,
-                label = stringRes(
-                    R.string.enum__emoji_skin_tone__default,
-                    "emoji" to "\uD83D\uDC4B" // 👋
-                ),
-            )
-            entry(
-                key = EmojiSkinTone.LIGHT_SKIN_TONE,
-                label = stringRes(
-                    R.string.enum__emoji_skin_tone__light_skin_tone,
-                    "emoji" to "\uD83D\uDC4B\uD83C\uDFFB" // 👋🏻
-                ),
-            )
-            entry(
-                key = EmojiSkinTone.MEDIUM_LIGHT_SKIN_TONE,
-                label = stringRes(
-                    R.string.enum__emoji_skin_tone__medium_light_skin_tone,
-                    "emoji" to "\uD83D\uDC4B\uD83C\uDFFC" // 👋🏼
-                ),
-            )
-            entry(
-                key = EmojiSkinTone.MEDIUM_SKIN_TONE,
-                label = stringRes(
-                    R.string.enum__emoji_skin_tone__medium_skin_tone,
-                    "emoji" to "\uD83D\uDC4B\uD83C\uDFFD" // 👋🏽
-                ),
-            )
-            entry(
-                key = EmojiSkinTone.MEDIUM_DARK_SKIN_TONE,
-                label = stringRes(
-                    R.string.enum__emoji_skin_tone__medium_dark_skin_tone,
-                    "emoji" to "\uD83D\uDC4B\uD83C\uDFFE" // 👋🏾
-                ),
-            )
-            entry(
-                key = EmojiSkinTone.DARK_SKIN_TONE,
-                label = stringRes(
-                    R.string.enum__emoji_skin_tone__dark_skin_tone,
-                    "emoji" to "\uD83D\uDC4B\uD83C\uDFFF" // 👋🏿
-                ),
-            )
-        }
-    },
-    EmojiSuggestionType::class to DEFAULT to {
-        listPrefEntries {
-            entry(
-                key = EmojiSuggestionType.LEADING_COLON,
-                label = stringRes(R.string.enum__emoji_suggestion_type__leading_colon),
-                description = stringRes(R.string.enum__emoji_suggestion_type__leading_colon__description),
-            )
-            entry(
-                key = EmojiSuggestionType.INLINE_TEXT,
-                label = stringRes(R.string.enum__emoji_suggestion_type__inline_text),
-                description = stringRes(R.string.enum__emoji_suggestion_type__inline_text__description),
             )
         }
     },

@@ -27,7 +27,6 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardItem
 import dev.patrickgold.florisboard.ime.clipboard.provider.ItemType
-import dev.patrickgold.florisboard.ime.media.emoji.Emoji
 import dev.patrickgold.florisboard.lib.util.NetworkUtils
 
 /**
@@ -146,26 +145,4 @@ data class ClipboardSuggestionCandidate(
         ItemType.IMAGE -> Icons.Default.Image
         ItemType.VIDEO -> Icons.Default.Videocam
     }
-}
-
-/**
- * Represents a candidate suggestion for an emoji.
- *
- * This class encapsulates an emoji, along with additional metadata for its presentation and behavior within
- * the suggestion system. It extends the [SuggestionCandidate] class, providing a specialized implementation for
- * emoji suggestions.
- *
- * @see SuggestionCandidate
- */
-data class EmojiSuggestionCandidate(
-    val emoji: Emoji,
-    val showName: Boolean,
-    override val confidence: Double = 1.0,
-    override val isEligibleForAutoCommit: Boolean = false,
-    override val isEligibleForUserRemoval: Boolean = false,
-    override val icon: ImageVector? = null,
-    override val sourceProvider: SuggestionProvider? = null,
-) : SuggestionCandidate {
-    override val text = emoji.value
-    override val secondaryText = if (showName) emoji.name else null
 }

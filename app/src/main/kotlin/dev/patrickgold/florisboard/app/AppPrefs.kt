@@ -33,10 +33,6 @@ import dev.patrickgold.florisboard.ime.input.InputFeedbackActivationMode
 import dev.patrickgold.florisboard.ime.keyboard.IncognitoMode
 import dev.patrickgold.florisboard.ime.keyboard.SpaceBarMode
 import dev.patrickgold.florisboard.ime.landscapeinput.LandscapeInputUiMode
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiHairStyle
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiHistory
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiSkinTone
-import dev.patrickgold.florisboard.ime.media.emoji.EmojiSuggestionType
 import dev.patrickgold.florisboard.ime.nlp.SpellingLanguageMode
 import dev.patrickgold.florisboard.ime.smartbar.CandidatesDisplayMode
 import dev.patrickgold.florisboard.ime.smartbar.ExtendedActionsPlacement
@@ -64,7 +60,6 @@ import dev.patrickgold.jetpref.datastore.model.PreferenceMigrationEntry
 import dev.patrickgold.jetpref.datastore.model.PreferenceModel
 import dev.patrickgold.jetpref.datastore.model.PreferenceType
 import dev.patrickgold.jetpref.material.ui.ColorRepresentation
-import kotlinx.serialization.json.Json
 import org.florisboard.lib.android.isOrientationPortrait
 
 val FlorisPreferenceStore = jetprefDataStoreOf(FlorisPreferenceModel::class)
@@ -241,67 +236,6 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         val enableFlorisUserDictionary = boolean(
             key = "suggestion__enable_floris_user_dictionary",
             default = true,
-        )
-    }
-
-    val emoji = Emoji()
-    inner class Emoji {
-        val preferredSkinTone = enum(
-            key = "emoji__preferred_skin_tone",
-            default = EmojiSkinTone.DEFAULT,
-        )
-        val preferredHairStyle = enum(
-            key = "emoji__preferred_hair_style",
-            default = EmojiHairStyle.DEFAULT,
-        )
-        val historyEnabled = boolean(
-            key = "emoji__history_enabled",
-            default = true,
-        )
-        val historyData = custom(
-            key = "emoji__history_data",
-            default = EmojiHistory.Empty,
-            serializer = EmojiHistory.Serializer,
-        )
-        val historyPinnedUpdateStrategy = enum(
-            key = "emoji__history_pinned_update_strategy",
-            default = EmojiHistory.UpdateStrategy.MANUAL_SORT_PREPEND,
-        )
-        val historyPinnedMaxSize = int(
-            key = "emoji__history_pinned_max_size",
-            default = EmojiHistory.MaxSizeUnlimited,
-        )
-        val historyRecentUpdateStrategy = enum(
-            key = "emoji__history_recent_update_strategy",
-            default = EmojiHistory.UpdateStrategy.AUTO_SORT_PREPEND,
-        )
-        val historyRecentMaxSize = int(
-            key = "emoji__history_recent_max_size",
-            default = 90,
-        )
-        val suggestionEnabled = boolean(
-            key = "emoji__suggestion_enabled",
-            default = true,
-        )
-        val suggestionType = enum(
-            key = "emoji__suggestion_type",
-            default = EmojiSuggestionType.LEADING_COLON,
-        )
-        val suggestionUpdateHistory = boolean(
-            key = "emoji__suggestion_update_history",
-            default = true,
-        )
-        val suggestionCandidateShowName = boolean(
-            key = "emoji__suggestion_candidate_show_name",
-            default = false,
-        )
-        val suggestionQueryMinLength = int(
-            key = "emoji__suggestion_query_min_length",
-            default = 3,
-        )
-        val suggestionCandidateMaxCount = int(
-            key = "emoji__suggestion_candidate_max_count",
-            default = 5,
         )
     }
 
@@ -770,20 +704,6 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
 
     override fun migrate(entry: PreferenceMigrationEntry): PreferenceMigrationEntry {
         return when (entry.key) {
-
-            // Migrate media prefs to emoji prefs
-            // Keep migration rule until: 0.6 dev cycle
-            "media__emoji_recently_used" -> {
-                val emojiValues = entry.rawValue.split(";")
-                val recent = emojiValues.map {
-                    dev.patrickgold.florisboard.ime.media.emoji.Emoji(it, "", emptyList())
-                }
-                val data = EmojiHistory(emptyList(), recent)
-                entry.transform(key = "emoji__history_data", rawValue = Json.encodeToString(data))
-            }
-            "media__emoji_recently_used_max_size" -> {
-                entry.transform(key = "emoji__history_recent_max_size")
-            }
 
             // Migrate advanced prefs to other prefs
             // Keep migration rules until: 0.7 dev cycle

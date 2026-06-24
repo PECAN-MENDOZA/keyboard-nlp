@@ -88,7 +88,6 @@ object KeyCode {
     const val VIEW_PHONE2 =                 -207
 
     const val IME_UI_MODE_TEXT =            -211
-    const val IME_UI_MODE_MEDIA =           -212
     const val IME_UI_MODE_CLIPBOARD =       -213
 
     const val SYSTEM_INPUT_METHOD_PICKER =  -221

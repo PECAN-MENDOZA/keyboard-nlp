@@ -131,7 +131,6 @@ data class TextKeyData(
                 VIEW_SYMBOLS2,
                 VIEW_NUMERIC_ADVANCED,
                 IME_UI_MODE_TEXT,
-                IME_UI_MODE_MEDIA,
                 IME_UI_MODE_CLIPBOARD,
                 SYSTEM_INPUT_METHOD_PICKER,
                 SYSTEM_PREV_INPUT_METHOD,
@@ -411,12 +410,6 @@ data class TextKeyData(
             type = KeyType.SYSTEM_GUI,
             code = KeyCode.IME_UI_MODE_TEXT,
             label = "ime_ui_mode_text",
-        )
-        /** Predefined key data for [KeyCode.IME_UI_MODE_MEDIA] */
-        val IME_UI_MODE_MEDIA = TextKeyData(
-            type = KeyType.SYSTEM_GUI,
-            code = KeyCode.IME_UI_MODE_MEDIA,
-            label = "ime_ui_mode_media",
         )
         /** Predefined key data for [KeyCode.IME_UI_MODE_CLIPBOARD] */
         val IME_UI_MODE_CLIPBOARD = TextKeyData(
