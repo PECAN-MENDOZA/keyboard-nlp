@@ -16,18 +16,7 @@
 
 package dev.patrickgold.florisboard.ime.nlp
 
-import android.content.Context
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.Assignment
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.ui.graphics.vector.ImageVector
-import dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardItem
-import dev.patrickgold.florisboard.ime.clipboard.provider.ItemType
-import dev.patrickgold.florisboard.lib.util.NetworkUtils
 
 /**
  * Interface for a candidate item, which is returned by a suggestion provider and used by the UI logic to render
@@ -112,37 +101,4 @@ data class WordSuggestionCandidate(
     override val sourceProvider: SuggestionProvider? = null,
 ) : SuggestionCandidate {
     override val icon: ImageVector? = null
-}
-
-/**
- * Default implementation for a clipboard candidate. Should generally not be used by a suggestion provider, except by
- * the clipboard suggestion provider.
- *
- * @see SuggestionCandidate
- */
-data class ClipboardSuggestionCandidate(
-    val clipboardItem: ClipboardItem,
-    override val sourceProvider: SuggestionProvider?,
-    val context: Context,
-) : SuggestionCandidate {
-    override val text: CharSequence = clipboardItem.displayText(context)
-
-    override val secondaryText: CharSequence? = null
-
-    override val confidence: Double = 1.0
-
-    override val isEligibleForAutoCommit: Boolean = false
-
-    override val isEligibleForUserRemoval: Boolean = true
-
-    override val icon: ImageVector = when (clipboardItem.type) {
-        ItemType.TEXT -> when {
-            NetworkUtils.isEmailAddress(text) -> Icons.Default.Email
-            NetworkUtils.isUrl(text) -> Icons.Default.Link
-            NetworkUtils.isPhoneNumber(text) -> Icons.Default.Phone
-            else -> Icons.AutoMirrored.Outlined.Assignment
-        }
-        ItemType.IMAGE -> Icons.Default.Image
-        ItemType.VIDEO -> Icons.Default.Videocam
-    }
 }

@@ -17,8 +17,7 @@
 package dev.patrickgold.florisboard.ime
 
 enum class ImeUiMode(val value: Int) {
-    TEXT(0),
-    CLIPBOARD(2);
+    TEXT(0);
 
     companion object {
         fun fromInt(int: Int) = entries.firstOrNull { it.value == int } ?: TEXT

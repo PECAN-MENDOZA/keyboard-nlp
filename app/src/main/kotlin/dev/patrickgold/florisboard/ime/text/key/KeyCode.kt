@@ -64,8 +64,6 @@ object KeyCode {
     const val CLIPBOARD_PASTE =              -33
     const val CLIPBOARD_SELECT =             -34
     const val CLIPBOARD_SELECT_ALL =         -35
-    const val CLIPBOARD_CLEAR_HISTORY =      -36
-    const val CLIPBOARD_CLEAR_FULL_HISTORY = -37
     const val CLIPBOARD_CLEAR_PRIMARY_CLIP = -38
 
     const val TOGGLE_FLOATING_WINDOW =      -109
@@ -88,7 +86,6 @@ object KeyCode {
     const val VIEW_PHONE2 =                 -207
 
     const val IME_UI_MODE_TEXT =            -211
-    const val IME_UI_MODE_CLIPBOARD =       -213
 
     const val SYSTEM_INPUT_METHOD_PICKER =  -221
     const val SYSTEM_PREV_INPUT_METHOD =    -222

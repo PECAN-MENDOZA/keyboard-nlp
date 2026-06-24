@@ -58,8 +58,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.devtools.DevtoolsOverlay
-import dev.patrickgold.florisboard.ime.ImeUiMode
-import dev.patrickgold.florisboard.ime.clipboard.ClipboardInputLayout
 import dev.patrickgold.florisboard.ime.input.LocalInputFeedbackController
 import dev.patrickgold.florisboard.ime.keyboard.ProvideKeyboardRowBaseHeight
 import dev.patrickgold.florisboard.ime.sheet.BottomSheetWindow
@@ -222,10 +220,7 @@ private fun ImeInnerWindow() {
         allowClip = false,
     ) {
         Column {
-            when (state.imeUiMode) {
-                ImeUiMode.TEXT -> TextInputLayout()
-                ImeUiMode.CLIPBOARD -> ProvideActualLayoutDirection { ClipboardInputLayout() }
-            }
+            TextInputLayout()
             ImeSystemUiFloating()
         }
         ImeWindowResizeHandlesFixed()

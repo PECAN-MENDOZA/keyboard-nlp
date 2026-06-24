@@ -40,7 +40,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
-import dev.patrickgold.florisboard.ime.nlp.ClipboardSuggestionCandidate
 import dev.patrickgold.florisboard.ime.nlp.SuggestionCandidate
 import dev.patrickgold.florisboard.ime.theme.FlorisImeUi
 import dev.patrickgold.florisboard.keyboardManager
@@ -147,11 +146,7 @@ private fun CandidateItem(
 ) = with(LocalDensity.current) {
     var isPressed by remember { mutableStateOf(false) }
 
-    val elementName = if (candidate is ClipboardSuggestionCandidate) {
-        FlorisImeUi.SmartbarCandidateClip
-    } else {
-        FlorisImeUi.SmartbarCandidateWord
-    }.elementName
+    val elementName = FlorisImeUi.SmartbarCandidateWord.elementName
     val attributes = mapOf("auto-commit" to if (candidate.isEligibleForAutoCommit) 1 else 0)
     val selector = if (isPressed) SnyggSelector.PRESSED else SnyggSelector.NONE
 
