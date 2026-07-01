@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
-import dev.patrickgold.florisboard.education.CorrectionSuggestionsSheet
 import dev.patrickgold.florisboard.education.EducationalCorrectionState
 import dev.patrickgold.florisboard.education.OnboardingHintSheet
 import dev.patrickgold.florisboard.educationalCorrectionManager
@@ -38,11 +37,12 @@ fun BottomSheetWindow() {
     val state by keyboardManager.activeState.collectAsState()
     val correctionState by educationalCorrectionManager.state.collectAsState()
     val showOnboarding by educationalCorrectionManager.onboardingHint.collectAsState()
-    val isCorrectionSheetVisible = correctionState !is EducationalCorrectionState.Idle
+    // La corrección ya no vive aquí: se muestra como panel apilado sobre el teclado
+    // (ver EducationalCorrectionPanel en TextInputLayout), para no tapar las teclas.
     val isOnboardingVisible = showOnboarding && correctionState is EducationalCorrectionState.Idle
 
     BottomSheetHostUi(
-        isShowing = state.isAnyBottomSheetVisible() || isCorrectionSheetVisible || isOnboardingVisible,
+        isShowing = state.isAnyBottomSheetVisible() || isOnboardingVisible,
         onHide = {
             if (state.isActionsEditorVisible) {
                 keyboardManager.activeState.isActionsEditorVisible = false
@@ -50,7 +50,6 @@ fun BottomSheetWindow() {
             if (state.isSubtypeSelectionVisible) {
                 keyboardManager.activeState.isSubtypeSelectionVisible = false
             }
-            educationalCorrectionManager.dismissMessage()
             educationalCorrectionManager.dismissOnboarding()
         },
     ) {
@@ -59,14 +58,6 @@ fun BottomSheetWindow() {
         }
         if (state.isSubtypeSelectionVisible) {
             SelectSubtypePanel()
-        }
-        if (isCorrectionSheetVisible) {
-            CorrectionSuggestionsSheet(
-                state = correctionState,
-                onAccept = educationalCorrectionManager::acceptSuggestion,
-                onIgnore = educationalCorrectionManager::ignoreSuggestion,
-                onRetry = educationalCorrectionManager::retryCorrection,
-            )
         }
         if (isOnboardingVisible) {
             OnboardingHintSheet(

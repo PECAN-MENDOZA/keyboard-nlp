@@ -75,6 +75,7 @@ class EducationalApiRepository {
         sessionId: String,
         selectedSuggestion: String?,
         accepted: Boolean,
+        finalText: String? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             request(
@@ -82,7 +83,9 @@ class EducationalApiRepository {
                 path = "/corrections/sessions/$sessionId/feedback",
                 method = "PATCH",
                 token = token,
-                body = json.encodeToString(CorrectionFeedbackRequest(selectedSuggestion, accepted)),
+                body = json.encodeToString(
+                    CorrectionFeedbackRequest(selectedSuggestion, accepted, finalText),
+                ),
             )
             Unit
         }

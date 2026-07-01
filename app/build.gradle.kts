@@ -81,7 +81,7 @@ configure<ApplicationExtension> {
         buildConfigField(
             "String",
             "EDUCATION_BACKEND_BASE_URL",
-            "\"https://backend-887695300669.us-central1.run.app/api/v1\"",
+            "\"https://backend-o4kvbijcma-uc.a.run.app/api/v1\"",
         )
 
         sourceSets {

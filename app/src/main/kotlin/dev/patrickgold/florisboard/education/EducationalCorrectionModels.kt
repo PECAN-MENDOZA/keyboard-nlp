@@ -106,6 +106,12 @@ data class CorrectionSessionResponse(
     val suggestionOptions: List<CorrectionSuggestionOption> = emptyList(),
     @SerialName("palabras_corregidas")
     val correctedWords: List<CorrectionWordResponse> = emptyList(),
+    // Devueltos por el backend tras el feedback (contrato con texto_final). Opcionales: en la
+    // respuesta inicial de /process aún no vienen, y con ignoreUnknownKeys no romperían igual.
+    @SerialName("texto_final")
+    val finalText: String? = null,
+    @SerialName("fue_editada")
+    val wasEdited: Boolean = false,
 ) {
     fun displayOptions(): List<CorrectionSuggestionOption> {
         val richOptions = suggestionOptions
@@ -135,6 +141,10 @@ data class CorrectionFeedbackRequest(
     val selectedSuggestion: String?,
     @SerialName("acepto_correccion")
     val acceptedCorrection: Boolean,
+    // Texto realmente insertado tras la edición manual del alumno. Opcional: null cuando aceptó
+    // la sugerencia tal cual. El backend clasifica como "editada" si difiere de la sugerencia base.
+    @SerialName("texto_final")
+    val finalText: String? = null,
 )
 
 sealed class EducationalCorrectionState {
@@ -143,6 +153,20 @@ sealed class EducationalCorrectionState {
     data class ShowingSuggestions(
         val extractedText: ExtractedEducationalText,
         val response: CorrectionSessionResponse,
+    ) : EducationalCorrectionState()
+
+    /**
+     * El alumno eligió "Editar": la sugerencia se volvió texto editable DENTRO del panel del
+     * teclado (buffer interno). Las teclas se enrutan a [buffer] (no al campo de la app) y [cursor]
+     * marca la posición de inserción. Nada toca el campo real hasta "Guardar y enviar", que vuelca
+     * [buffer] como `texto_final`. [baseSuggestion] es la opción de la que partió (`sugerencia_elegida`).
+     */
+    data class Editing(
+        val extractedText: ExtractedEducationalText,
+        val response: CorrectionSessionResponse,
+        val baseSuggestion: String,
+        val buffer: String,
+        val cursor: Int,
     ) : EducationalCorrectionState()
     data class Message(val text: String) : EducationalCorrectionState()
 

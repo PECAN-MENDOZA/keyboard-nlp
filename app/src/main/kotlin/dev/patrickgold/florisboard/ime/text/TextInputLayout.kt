@@ -29,6 +29,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.EducationalCorrectionPanel
 import dev.patrickgold.florisboard.ime.smartbar.IncognitoDisplayMode
 import dev.patrickgold.florisboard.ime.smartbar.InlineSuggestionsStyleCache
 import dev.patrickgold.florisboard.ime.smartbar.Smartbar
@@ -59,6 +60,9 @@ fun TextInputLayout(
             .wrapContentHeight(),
     ) {
         Smartbar()
+        // Panel de corrección educativa apilado sobre el teclado (no lo tapa). Se muestra solo
+        // cuando hay una corrección activa; el teclado sigue disponible debajo para editar.
+        EducationalCorrectionPanel()
         if (state.isActionsOverflowVisible) {
             QuickActionsOverflowPanel()
         } else {

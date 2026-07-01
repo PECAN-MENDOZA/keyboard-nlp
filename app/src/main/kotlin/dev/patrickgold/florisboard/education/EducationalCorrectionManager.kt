@@ -259,6 +259,92 @@ class EducationalCorrectionManager(context: Context) {
         )
     }
 
+    /**
+     * "Editar": la sugerencia se vuelve texto editable dentro del panel (buffer interno). No toca
+     * el campo real todavía; las teclas se enrutan al buffer vía [isEditingBuffer]/[bufferInsert].
+     */
+    fun editSuggestion(suggestion: CorrectionSuggestionOption) {
+        val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: return
+        _state.value = EducationalCorrectionState.Editing(
+            extractedText = current.extractedText,
+            response = current.response,
+            baseSuggestion = suggestion.text,
+            buffer = suggestion.text,
+            cursor = suggestion.text.length,
+        )
+    }
+
+    /** True cuando hay un buffer de edición activo: el [KeyboardManager] enruta las teclas aquí. */
+    fun isEditingBuffer(): Boolean = _state.value is EducationalCorrectionState.Editing
+
+    /** Inserta [text] en la posición del cursor del buffer. */
+    fun bufferInsert(text: String) {
+        val s = _state.value as? EducationalCorrectionState.Editing ?: return
+        val c = s.cursor.coerceIn(0, s.buffer.length)
+        _state.value = s.copy(
+            buffer = s.buffer.substring(0, c) + text + s.buffer.substring(c),
+            cursor = c + text.length,
+        )
+    }
+
+    /** Borra el carácter anterior al cursor del buffer. */
+    fun bufferBackspace() {
+        val s = _state.value as? EducationalCorrectionState.Editing ?: return
+        val c = s.cursor.coerceIn(0, s.buffer.length)
+        if (c == 0) return
+        _state.value = s.copy(
+            buffer = s.buffer.substring(0, c - 1) + s.buffer.substring(c),
+            cursor = c - 1,
+        )
+    }
+
+    /** Mueve el cursor del buffer [delta] posiciones (p. ej. flechas ← →). */
+    fun bufferMoveCursor(delta: Int) {
+        val s = _state.value as? EducationalCorrectionState.Editing ?: return
+        _state.value = s.copy(cursor = (s.cursor + delta).coerceIn(0, s.buffer.length))
+    }
+
+    /** Fija el cursor del buffer en [index] (p. ej. al tocar sobre el texto del panel). */
+    fun bufferSetCursor(index: Int) {
+        val s = _state.value as? EducationalCorrectionState.Editing ?: return
+        _state.value = s.copy(cursor = index.coerceIn(0, s.buffer.length))
+    }
+
+    /** "Guardar y enviar": vuelca el buffer al campo real y envía el feedback (aceptado/editado). */
+    fun confirmEdit() {
+        val current = _state.value as? EducationalCorrectionState.Editing ?: return
+        val buffer = current.buffer
+        if (buffer.isBlank()) {
+            _state.value = EducationalCorrectionState.ShowingSuggestions(current.extractedText, current.response)
+            return
+        }
+        val replaced = editorInstance.replaceRangeIfUnchanged(
+            range = current.extractedText.range,
+            expectedText = current.extractedText.text,
+            replacement = buffer,
+        )
+        if (!replaced) {
+            _state.value = EducationalCorrectionState.Message("El texto cambió. Solicita una nueva corrección.")
+            return
+        }
+        val edited = buffer != current.baseSuggestion
+        sendFeedbackAndClose(
+            response = current.response,
+            selectedSuggestion = current.baseSuggestion,
+            accepted = true,
+            finalText = if (edited) buffer else null,
+        )
+    }
+
+    /** Cancela la edición: descarta el buffer y vuelve a la lista (el campo real no se tocó). */
+    fun cancelEdit() {
+        val current = _state.value as? EducationalCorrectionState.Editing ?: return
+        _state.value = EducationalCorrectionState.ShowingSuggestions(
+            extractedText = current.extractedText,
+            response = current.response,
+        )
+    }
+
     fun dismissMessage() {
         if (_state.value !is EducationalCorrectionState.Processing) {
             _state.value = EducationalCorrectionState.Idle
@@ -269,6 +355,7 @@ class EducationalCorrectionManager(context: Context) {
         response: CorrectionSessionResponse,
         selectedSuggestion: String?,
         accepted: Boolean,
+        finalText: String? = null,
     ) {
         _state.value = EducationalCorrectionState.Idle
         scope.launch {
@@ -280,6 +367,7 @@ class EducationalCorrectionManager(context: Context) {
                     sessionId = response.sessionId,
                     selectedSuggestion = selectedSuggestion,
                     accepted = accepted,
+                    finalText = finalText,
                 )
             }
         }

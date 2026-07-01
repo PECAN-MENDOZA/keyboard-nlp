@@ -49,6 +49,8 @@ val LocalSnyggForcedFontFamily = compositionLocalOf<FontFamily?> { null }
  * @param attributes The attributes of the element used to refine the query.
  * @param selector A specific SnyggSelector to query the style for.
  * @param modifier The modifier to be applied to the Text.
+ * @param maxLines If non-null, overrides the stylesheet's `text-max-lines` for this text. Use
+ *   [Int.MAX_VALUE] to let long content wrap freely instead of being truncated to the theme's limit.
  * @param text The text of the element.
  *
  * @since 0.5.0-alpha01
@@ -61,6 +63,7 @@ fun SnyggText(
     attributes: SnyggQueryAttributes = emptyMap(),
     selector: SnyggSelector? = null,
     modifier: Modifier = Modifier,
+    maxLines: Int? = null,
     text: String,
 ) {
     ProvideSnyggStyle(elementName, attributes, selector) { style ->
@@ -82,7 +85,7 @@ fun SnyggText(
             lineHeight = style.lineHeight(),
             textAlign = style.textAlign(),
             textDecoration = style.textDecorationLine(),
-            maxLines = style.textMaxLines(),
+            maxLines = maxLines ?: style.textMaxLines(),
             overflow = style.textOverflow(),
         )
     }
