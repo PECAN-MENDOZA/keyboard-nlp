@@ -110,6 +110,12 @@ configure<ApplicationExtension> {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug+${getGitCommitHash(short = true).get()}"
 
+            buildConfigField(
+                "String",
+                "EDUCATION_BACKEND_BASE_URL",
+                "\"http://127.0.0.1:8080/api/v1\"",
+            )
+
             isDebuggable = true
             isJniDebuggable = false
         }
