@@ -45,7 +45,8 @@ import dev.patrickgold.florisboard.app.ext.ExtensionImportScreenType
 import dev.patrickgold.florisboard.app.ext.ExtensionListScreen
 import dev.patrickgold.florisboard.app.ext.ExtensionListScreenType
 import dev.patrickgold.florisboard.app.ext.ExtensionViewScreen
-import dev.patrickgold.florisboard.app.settings.HomeScreen
+import dev.patrickgold.florisboard.app.settings.StudentHomeScreen
+import dev.patrickgold.florisboard.app.settings.KeyboardSettingsScreen
 import dev.patrickgold.florisboard.app.settings.about.AboutScreen
 import dev.patrickgold.florisboard.app.settings.about.ProjectLicenseScreen
 import dev.patrickgold.florisboard.app.settings.about.ThirdPartyLicensesScreen
@@ -57,7 +58,6 @@ import dev.patrickgold.florisboard.app.settings.dictionary.DictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryType
 import dev.patrickgold.florisboard.app.settings.accessibility.AccessibilityScreen
-import dev.patrickgold.florisboard.app.settings.education.EducationScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.InputFeedbackScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.KeyboardScreen
 import dev.patrickgold.florisboard.app.settings.localization.LanguagePackManagerScreen
@@ -103,6 +103,10 @@ object Routes {
         object Home
 
         @Serializable
+        @Deeplink("settings/keyboard-settings")
+        object KeyboardSettings
+
+        @Serializable
         @Deeplink("settings/localization")
         object Localization
 
@@ -137,10 +141,6 @@ object Routes {
         @Serializable
         @Deeplink("settings/keyboard/input-feedback")
         object InputFeedback
-
-        @Serializable
-        @Deeplink("settings/education")
-        object Education
 
         @Serializable
         @Deeplink("settings/accessibility")
@@ -243,7 +243,8 @@ object Routes {
         ) {
             composable<Setup.Screen> { SetupScreen() }
 
-            composableWithDeepLink(Settings.Home::class) { HomeScreen() }
+            composableWithDeepLink(Settings.Home::class) { StudentHomeScreen() }
+            composableWithDeepLink(Settings.KeyboardSettings::class) { KeyboardSettingsScreen() }
 
             composableWithDeepLink(Settings.Localization::class) { LocalizationScreen() }
             composableWithDeepLink(Settings.SelectLocale::class) { SelectLocaleScreen() }
@@ -265,8 +266,6 @@ object Routes {
 
             composableWithDeepLink(Settings.Keyboard::class) { KeyboardScreen() }
             composableWithDeepLink(Settings.InputFeedback::class) { InputFeedbackScreen() }
-
-            composableWithDeepLink(Settings.Education::class) { EducationScreen() }
 
             composableWithDeepLink(Settings.Accessibility::class) { AccessibilityScreen() }
 
