@@ -21,10 +21,15 @@ import android.os.SystemClock
 import dev.patrickgold.florisboard.BuildConfig
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.editorInstance
+import dev.patrickgold.florisboard.ime.editor.EditorContent
+import dev.patrickgold.florisboard.ime.editor.EditorRange
+import dev.patrickgold.florisboard.ime.editor.FlorisEditorInfo
 import dev.patrickgold.florisboard.keyboardManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -37,9 +42,7 @@ class EducationalCorrectionManager(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val prefs by FlorisPreferenceStore
     private var lastPrewarmAtMs: Long = 0L
-
-    private val _onboardingHint = MutableStateFlow(false)
-    val onboardingHint: StateFlow<Boolean> = _onboardingHint
+    private var autoDismissJob: Job? = null
 
     private val _state = MutableStateFlow<EducationalCorrectionState>(EducationalCorrectionState.Idle)
     val state: StateFlow<EducationalCorrectionState> = _state
@@ -50,8 +53,7 @@ class EducationalCorrectionManager(context: Context) {
     val connectionState: StateFlow<EducationalBackendConnectionState> = _connectionState
 
     // Sesion cacheada en memoria. El descifrado con Keystore + lectura de disco solo ocurre una
-    // vez (al construir el manager), no en cada recomposicion ni en cada peticion de correccion.
-    // Una sesion guardada que ya vencio se descarta y borra de entrada (no cuenta como activa).
+    // vez (al construir el manager). Una sesion guardada que ya vencio se descarta de entrada.
     private val _session = MutableStateFlow(loadValidSession())
     val session: StateFlow<EducationalSession?> = _session
 
@@ -65,6 +67,28 @@ class EducationalCorrectionManager(context: Context) {
         onSuccess = ::persistSession,
     )
     val loginState: StateFlow<LoginState> = loginFlow.state
+
+    // Campo donde se pidió la última corrección. Si el alumno pasa a otro campo u otra app, se
+    // limpia; si solo se ocultó el teclado (info Unspecified) se conserva para reaparecer.
+    private var correctionFieldKey: String? = null
+
+    init {
+        scope.launch {
+            editorInstance.activeInfoFlow.collect { info ->
+                if (info === FlorisEditorInfo.Unspecified) return@collect
+                val key = fieldKey(info)
+                if (correctionFieldKey != null && key != correctionFieldKey) reset()
+            }
+        }
+        // Mientras hay algo aplicado o en edición, cada cambio de contenido se contrasta con el ancla.
+        scope.launch {
+            editorInstance.activeContentFlow.collect { content -> onContentChanged(content) }
+        }
+    }
+
+    // FlorisEditorInfo no es data class: se compara por paquete, id de campo y tipo.
+    private fun fieldKey(info: FlorisEditorInfo): String =
+        "${info.base.packageName}/${info.base.fieldId}/${info.base.inputType}"
 
     private fun loadValidSession(): EducationalSession? {
         val stored = sessionStore.load() ?: return null
@@ -88,6 +112,14 @@ class EducationalCorrectionManager(context: Context) {
         _session.value = null
     }
 
+    fun login(username: String, pin: String) = loginFlow.submit(username, pin)
+
+    fun logout() {
+        clearSession()
+        loginFlow.reset()
+        reset()
+    }
+
     fun checkBackendConnection() {
         _connectionState.value = EducationalBackendConnectionState.Checking
         scope.launch {
@@ -103,13 +135,11 @@ class EducationalCorrectionManager(context: Context) {
     }
 
     /**
-     * Lanza un health-check best-effort para despertar el backend (cold start de Cloud Run) antes
-     * de que el alumno toque IA. Debounced y silencioso: no hace nada sin sesion activa, si la
-     * sesion vencio, si ya hay un chequeo en curso, o si se llamo hace poco.
+     * Health-check best-effort para despertar el backend antes de que el alumno toque IA.
+     * Debounced y silencioso.
      */
     fun prewarm() {
-        val session = _session.value ?: return
-        if (session.isExpired()) return
+        val session = currentSession() ?: return
         if (_connectionState.value is EducationalBackendConnectionState.Checking) return
         val now = SystemClock.elapsedRealtime()
         if (now - lastPrewarmAtMs < PREWARM_DEBOUNCE_MS) return
@@ -117,36 +147,40 @@ class EducationalCorrectionManager(context: Context) {
         checkBackendConnection()
     }
 
-    /** Muestra una sola vez la pista de uso, tras el primer login. */
+    /** Globo de bienvenida una sola vez tras el primer login. */
     fun maybeShowOnboarding() {
-        if (_session.value == null) return
+        if (currentSession() == null) return
         if (prefs.accessibility.onboardingHintShown.get()) return
-        _onboardingHint.value = true
-    }
-
-    fun dismissOnboarding() {
-        _onboardingHint.value = false
+        if (_state.value !is EducationalCorrectionState.Idle) return
         scope.launch { prefs.accessibility.onboardingHintShown.set(true) }
+        show(EducationalCorrectionState.Notice(EducationalMessages.SelectFirst, NoticeKind.INFO), ONBOARDING_MS)
     }
 
-    fun login(username: String, pin: String) = loginFlow.submit(username, pin)
+    /** True cuando las teclas deben ocultarse y los globos flotar sobre la app. */
+    fun isBubbleMode(): Boolean = _state.value is EducationalCorrectionState.ShowingSuggestions
 
-    fun logout() {
-        clearSession()
-        loginFlow.reset()
+    /** Android ocultó el teclado: las burbujas se van con él; el estado se conserva para reaparecer. */
+    fun onKeyboardHidden() {
+        when (_state.value) {
+            is EducationalCorrectionState.Applied,
+            is EducationalCorrectionState.EditingInPlace -> finishEdit()
+            else -> Unit
+        }
     }
+
+    // ---- Solicitud ------------------------------------------------------------------------
 
     fun requestCorrection() {
         if (_state.value is EducationalCorrectionState.Processing) return
 
         val session = _session.value
         if (session == null) {
-            _state.value = EducationalCorrectionState.Message(EducationalMessages.NoSession)
+            show(EducationalCorrectionState.Notice(EducationalMessages.NoSession, NoticeKind.SESSION))
             return
         }
         if (session.isExpired()) {
             clearSession()
-            _state.value = EducationalCorrectionState.Message(EducationalMessages.SessionExpired)
+            show(EducationalCorrectionState.Notice(EducationalMessages.SessionExpired, NoticeKind.SESSION))
             return
         }
 
@@ -155,20 +189,15 @@ class EducationalCorrectionManager(context: Context) {
             keyboardState = keyboardManager.activeState.snapshot(),
             session = session,
         )?.let { reason ->
-            _state.value = EducationalCorrectionState.Message(reason)
+            show(EducationalCorrectionState.Notice(reason, NoticeKind.INFO), NOTICE_MS)
             return
         }
 
-        val extraction = EditorTextExtractor.extract(content = editorInstance.activeContent)
-        val extractedText = when (extraction) {
-            is EducationalExtractionResult.Blocked -> {
-                _state.value = EducationalCorrectionState.Message(extraction.reason)
-                return
-            }
-            is EducationalExtractionResult.Ready -> extraction.value
+        when (val extraction = EditorTextExtractor.extract(content = editorInstance.activeContent)) {
+            is EducationalExtractionResult.Blocked ->
+                show(EducationalCorrectionState.Notice(extraction.reason, NoticeKind.INFO), NOTICE_MS)
+            is EducationalExtractionResult.Ready -> runCorrection(extraction.value)
         }
-
-        runCorrection(extractedText)
     }
 
     /** Reenvia manualmente el mismo texto tras un error recuperable (sin reintento automatico). */
@@ -179,167 +208,187 @@ class EducationalCorrectionManager(context: Context) {
     }
 
     private fun runCorrection(extractedText: ExtractedEducationalText) {
-        _state.value = EducationalCorrectionState.Processing(extractedText)
+        val processing = EducationalCorrectionState.Processing(extractedText, SystemClock.elapsedRealtime())
+        show(processing)
+        correctionFieldKey = fieldKey(editorInstance.activeInfo)
         scope.launch {
-            val activeSession = _session.value
-            if (activeSession == null || activeSession.isExpired()) {
+            val activeSession = currentSession()
+            if (activeSession == null) {
                 clearSession()
-                _state.value = EducationalCorrectionState.Message(EducationalMessages.SessionExpired)
+                show(EducationalCorrectionState.Notice(EducationalMessages.SessionExpired, NoticeKind.SESSION))
                 return@launch
             }
             val result = EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
-                repository.processCorrection(
-                    baseUrl = baseUrl,
-                    token = activeSession.token,
-                    text = extractedText.text,
-                )
+                repository.processCorrection(baseUrl = baseUrl, token = activeSession.token, text = extractedText.text)
             }
+            // Si mientras tanto cambió el campo o el alumno cerró, la respuesta ya no interesa.
+            if (_state.value != processing) return@launch
             result.onSuccess { response ->
-                _state.value = EducationalCorrectionState.ShowingSuggestions(extractedText, response)
+                val options = response.displayOptions().filter { it.text != extractedText.text }
+                if (options.isEmpty()) {
+                    show(EducationalCorrectionState.Notice(EducationalMessages.AlreadyCorrect, NoticeKind.SUCCESS), NOTICE_SHORT_MS)
+                    sendFeedback(response, selectedSuggestion = null, accepted = false)
+                } else {
+                    show(EducationalCorrectionState.ShowingSuggestions(extractedText, response))
+                }
             }.onFailure { error ->
                 if (error is EducationalHttpException && error.status == 401) {
                     clearSession()
                 }
-                _state.value = if (EducationalMessages.isRetryable(error)) {
-                    EducationalCorrectionState.Error(EducationalMessages.correction(error), retryText = extractedText)
-                } else {
-                    EducationalCorrectionState.Error(EducationalMessages.correction(error), retryText = null)
-                }
+                val retry = if (EducationalMessages.isRetryable(error)) extractedText else null
+                show(EducationalCorrectionState.Error(EducationalMessages.correction(error), retryText = retry))
             }
         }
     }
 
-    fun acceptSuggestion(suggestion: CorrectionSuggestionOption) {
+    // ---- Elegir ---------------------------------------------------------------------------
+
+    /** Toque corto en un globo: aplica y ofrece Deshacer 3 s. */
+    fun applySuggestion(option: CorrectionSuggestionOption) {
         val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: return
-        val replaced = editorInstance.replaceRangeIfUnchanged(
-            range = current.extractedText.range,
-            expectedText = current.extractedText.text,
-            replacement = suggestion.text,
-        )
-        if (!replaced) {
-            _state.value = EducationalCorrectionState.Message(EducationalMessages.TextChanged)
-            return
-        }
-        sendFeedbackAndClose(
-            response = current.response,
-            selectedSuggestion = suggestion.text,
-            accepted = true,
+        val anchor = replaceSelection(current.extractedText, option.text) ?: return
+        sendFeedback(current.response, selectedSuggestion = option.text, accepted = true)
+        show(EducationalCorrectionState.Applied(current.extractedText, current.response, option.text, anchor), UNDO_MS)
+    }
+
+    /** "✎ Editar" o pulsación larga: aplica y deja al alumno retocar en el campo real. */
+    fun editSuggestion(option: CorrectionSuggestionOption) {
+        val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: return
+        val anchor = replaceSelection(current.extractedText, option.text) ?: return
+        val start = EditorRange(anchor.start, anchor.start + option.text.length)
+        show(
+            EducationalCorrectionState.EditingInPlace(
+                extractedText = current.extractedText,
+                response = current.response,
+                baseSuggestion = option.text,
+                anchor = anchor,
+                lastKnown = TrackedRange.Inside(option.text, start),
+            ),
         )
     }
 
+    /** "Dejar como está": cierra los globos y registra el rechazo. */
     fun ignoreSuggestion() {
-        val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: run {
-            dismissMessage()
-            return
-        }
-        sendFeedbackAndClose(
-            response = current.response,
-            selectedSuggestion = null,
-            accepted = false,
-        )
+        val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: run { dismiss(); return }
+        sendFeedback(current.response, selectedSuggestion = null, accepted = false)
+        reset()
     }
 
-    /**
-     * "Editar": la sugerencia se vuelve texto editable dentro del panel (buffer interno). No toca
-     * el campo real todavía; las teclas se enrutan al buffer vía [isEditingBuffer]/[bufferInsert].
-     */
-    fun editSuggestion(suggestion: CorrectionSuggestionOption) {
-        val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: return
-        _state.value = EducationalCorrectionState.Editing(
-            extractedText = current.extractedText,
-            response = current.response,
-            baseSuggestion = suggestion.text,
-            buffer = suggestion.text,
-            cursor = suggestion.text.length,
-        )
-    }
-
-    /** True cuando hay un buffer de edición activo: el [KeyboardManager] enruta las teclas aquí. */
-    fun isEditingBuffer(): Boolean = _state.value is EducationalCorrectionState.Editing
-
-    /** Inserta [text] en la posición del cursor del buffer. */
-    fun bufferInsert(text: String) {
-        val s = _state.value as? EducationalCorrectionState.Editing ?: return
-        val c = s.cursor.coerceIn(0, s.buffer.length)
-        _state.value = s.copy(
-            buffer = s.buffer.substring(0, c) + text + s.buffer.substring(c),
-            cursor = c + text.length,
-        )
-    }
-
-    /** Borra el carácter anterior al cursor del buffer. */
-    fun bufferBackspace() {
-        val s = _state.value as? EducationalCorrectionState.Editing ?: return
-        val c = s.cursor.coerceIn(0, s.buffer.length)
-        if (c == 0) return
-        _state.value = s.copy(
-            buffer = s.buffer.substring(0, c - 1) + s.buffer.substring(c),
-            cursor = c - 1,
-        )
-    }
-
-    /** Mueve el cursor del buffer [delta] posiciones (p. ej. flechas ← →). */
-    fun bufferMoveCursor(delta: Int) {
-        val s = _state.value as? EducationalCorrectionState.Editing ?: return
-        _state.value = s.copy(cursor = (s.cursor + delta).coerceIn(0, s.buffer.length))
-    }
-
-    /** Fija el cursor del buffer en [index] (p. ej. al tocar sobre el texto del panel). */
-    fun bufferSetCursor(index: Int) {
-        val s = _state.value as? EducationalCorrectionState.Editing ?: return
-        _state.value = s.copy(cursor = index.coerceIn(0, s.buffer.length))
-    }
-
-    /** "Guardar y enviar": vuelca el buffer al campo real y envía el feedback (aceptado/editado). */
-    fun confirmEdit() {
-        val current = _state.value as? EducationalCorrectionState.Editing ?: return
-        val buffer = current.buffer
-        if (buffer.isBlank()) {
-            _state.value = EducationalCorrectionState.ShowingSuggestions(current.extractedText, current.response)
-            return
-        }
-        val replaced = editorInstance.replaceRangeIfUnchanged(
-            range = current.extractedText.range,
-            expectedText = current.extractedText.text,
-            replacement = buffer,
-        )
-        if (!replaced) {
-            _state.value = EducationalCorrectionState.Message(EducationalMessages.TextChanged)
-            return
-        }
-        val edited = buffer != current.baseSuggestion
-        sendFeedbackAndClose(
+    /** "✓ Listo" (o Listo implícito): envía el texto final tal como quedó en la app. */
+    fun finishEdit() {
+        val current = _state.value as? EducationalCorrectionState.EditingInPlace ?: return
+        val finalText = current.lastKnown.text
+        sendFeedback(
             response = current.response,
             selectedSuggestion = current.baseSuggestion,
             accepted = true,
-            finalText = if (edited) buffer else null,
+            finalText = finalText.takeIf { it != current.baseSuggestion },
         )
+        reset()
     }
 
-    /** Cancela la edición: descarta el buffer y vuelve a la lista (el campo real no se tocó). */
-    fun cancelEdit() {
-        val current = _state.value as? EducationalCorrectionState.Editing ?: return
-        _state.value = EducationalCorrectionState.ShowingSuggestions(
-            extractedText = current.extractedText,
-            response = current.response,
-        )
-    }
-
-    fun dismissMessage() {
-        if (_state.value !is EducationalCorrectionState.Processing) {
-            _state.value = EducationalCorrectionState.Idle
+    /** Deshacer desde Applied o EditingInPlace: restaura el texto original. */
+    fun undo() {
+        when (val current = _state.value) {
+            is EducationalCorrectionState.Applied -> {
+                val range = EditorRange(current.anchor.start, current.anchor.start + current.appliedText.length)
+                if (!editorInstance.replaceRangeIfUnchanged(range, current.appliedText, current.extractedText.text)) {
+                    show(EducationalCorrectionState.Notice(EducationalMessages.TextChanged, NoticeKind.INFO), NOTICE_MS)
+                    return
+                }
+                sendFeedback(current.response, selectedSuggestion = null, accepted = false, reason = REASON_UNDO)
+                reset()
+            }
+            is EducationalCorrectionState.EditingInPlace -> {
+                val known = current.lastKnown
+                if (!editorInstance.replaceRangeIfUnchanged(known.range, known.text, current.extractedText.text)) {
+                    show(EducationalCorrectionState.Notice(EducationalMessages.TextChanged, NoticeKind.INFO), NOTICE_MS)
+                    return
+                }
+                sendFeedback(current.response, selectedSuggestion = null, accepted = false, reason = REASON_UNDO)
+                reset()
+            }
+            else -> Unit
         }
     }
 
-    private fun sendFeedbackAndClose(
+    /** Cierra avisos y errores; no interrumpe una petición en curso. */
+    fun dismiss() {
+        when (_state.value) {
+            is EducationalCorrectionState.Processing -> Unit
+            is EducationalCorrectionState.EditingInPlace -> finishEdit()
+            else -> reset()
+        }
+    }
+
+    // ---- Internos -------------------------------------------------------------------------
+
+    /**
+     * Reemplaza la selección original por [replacement] y devuelve el ancla para seguirla.
+     * Si la app ya no tiene el texto esperado, avisa y devuelve null. Un fallo por conexión
+     * de entrada perdida se reintenta una vez tras pedir al sistema que muestre el teclado.
+     */
+    private fun replaceSelection(extracted: ExtractedEducationalText, replacement: String): EditAnchor? {
+        val anchor = InPlaceEditTracker.anchor(editorInstance.activeContent, extracted.range)
+        var replaced = editorInstance.replaceRangeIfUnchanged(extracted.range, extracted.text, replacement)
+        if (!replaced) {
+            dev.patrickgold.florisboard.FlorisImeService.showUi()
+            replaced = editorInstance.replaceRangeIfUnchanged(extracted.range, extracted.text, replacement)
+        }
+        if (!replaced || anchor == null) {
+            show(EducationalCorrectionState.Notice(EducationalMessages.TextChanged, NoticeKind.INFO), NOTICE_MS)
+            return null
+        }
+        return anchor
+    }
+
+    private fun onContentChanged(content: EditorContent) {
+        when (val current = _state.value) {
+            is EducationalCorrectionState.Applied -> {
+                // Cualquier tecla tras aplicar retira la tira de Deshacer sin más. Justo después de
+                // reemplazar, el editor puede emitir un estado intermedio con el texto original
+                // todavía presente (setSelection antes de commitText): no cuenta como tecla.
+                val tracked = InPlaceEditTracker.resolve(current.anchor, content)
+                val untouched = tracked is TrackedRange.Inside &&
+                    (tracked.text == current.appliedText || tracked.text == current.extractedText.text)
+                if (!untouched) reset()
+            }
+            is EducationalCorrectionState.EditingInPlace -> {
+                when (val tracked = InPlaceEditTracker.resolve(current.anchor, content)) {
+                    is TrackedRange.Inside -> _state.value = current.copy(lastKnown = tracked)
+                    TrackedRange.Lost -> finishEdit()
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun show(newState: EducationalCorrectionState, autoDismissMs: Long? = null) {
+        autoDismissJob?.cancel()
+        _state.value = newState
+        if (autoDismissMs != null) {
+            autoDismissJob = scope.launch {
+                delay(autoDismissMs)
+                if (_state.value == newState) reset()
+            }
+        }
+    }
+
+    private fun reset() {
+        autoDismissJob?.cancel()
+        correctionFieldKey = null
+        _state.value = EducationalCorrectionState.Idle
+    }
+
+    private fun sendFeedback(
         response: CorrectionSessionResponse,
         selectedSuggestion: String?,
         accepted: Boolean,
         finalText: String? = null,
+        reason: String? = null,
     ) {
-        _state.value = EducationalCorrectionState.Idle
         scope.launch {
-            val session = _session.value ?: return@launch
+            val session = currentSession() ?: return@launch
             EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
                 repository.sendFeedback(
                     baseUrl = baseUrl,
@@ -348,17 +397,25 @@ class EducationalCorrectionManager(context: Context) {
                     selectedSuggestion = selectedSuggestion,
                     accepted = accepted,
                     finalText = finalText,
+                    reason = reason,
                 )
             }
         }
     }
 
+    companion object {
+        const val UNDO_MS = 3_000L
+        const val NOTICE_MS = 4_000L
+        const val NOTICE_SHORT_MS = 3_000L
+        const val ONBOARDING_MS = 6_000L
+        const val PROCESSING_SLOW_AFTER_MS = 5_000L
+        const val REASON_UNDO = "UNDO"
+    }
 }
 
 private const val PREWARM_DEBOUNCE_MS = 2 * 60 * 1000L // 2 minutos
 
-// URL del backend desplegado. Se define en build.gradle.kts (buildConfigField
-// EDUCATION_BACKEND_BASE_URL) para poder cambiar el despliegue sin tocar el codigo.
+// URL del backend. Se define en build.gradle.kts (buildConfigField EDUCATION_BACKEND_BASE_URL).
 val EducationalBackendBaseUrls = listOf(
     BuildConfig.EDUCATION_BACKEND_BASE_URL,
 )

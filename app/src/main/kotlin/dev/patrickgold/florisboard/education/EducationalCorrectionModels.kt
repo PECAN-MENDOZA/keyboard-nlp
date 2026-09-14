@@ -145,36 +145,49 @@ data class CorrectionFeedbackRequest(
     // la sugerencia tal cual. El backend clasifica como "editada" si difiere de la sugerencia base.
     @SerialName("texto_final")
     val finalText: String? = null,
+    // Motivo opcional de un segundo feedback sobre la misma sesión ("UNDO"). El backend actual
+    // lo ignora; el plan del modo experimental lo registra como evento.
+    @SerialName("motivo")
+    val reason: String? = null,
 )
+
+enum class NoticeKind { INFO, SUCCESS, SESSION }
 
 sealed class EducationalCorrectionState {
     object Idle : EducationalCorrectionState()
-    data class Processing(val extractedText: ExtractedEducationalText) : EducationalCorrectionState()
+
+    data class Processing(
+        val extractedText: ExtractedEducationalText,
+        val startedAtMs: Long,
+    ) : EducationalCorrectionState()
+
+    /** Hay opciones que elegir: el teclado entra en modo burbujas. */
     data class ShowingSuggestions(
         val extractedText: ExtractedEducationalText,
         val response: CorrectionSessionResponse,
     ) : EducationalCorrectionState()
 
-    /**
-     * El alumno eligió "Editar": la sugerencia se volvió texto editable DENTRO del panel del
-     * teclado (buffer interno). Las teclas se enrutan a [buffer] (no al campo de la app) y [cursor]
-     * marca la posición de inserción. Nada toca el campo real hasta "Guardar y enviar", que vuelca
-     * [buffer] como `texto_final`. [baseSuggestion] es la opción de la que partió (`sugerencia_elegida`).
-     */
-    data class Editing(
+    /** Sugerencia aplicada; se ofrece Deshacer unos segundos. */
+    data class Applied(
+        val extractedText: ExtractedEducationalText,
+        val response: CorrectionSessionResponse,
+        val appliedText: String,
+        val anchor: EditAnchor,
+    ) : EducationalCorrectionState()
+
+    /** El alumno edita la sugerencia aplicada directamente en el campo de la app. */
+    data class EditingInPlace(
         val extractedText: ExtractedEducationalText,
         val response: CorrectionSessionResponse,
         val baseSuggestion: String,
-        val buffer: String,
-        val cursor: Int,
+        val anchor: EditAnchor,
+        val lastKnown: TrackedRange.Inside,
     ) : EducationalCorrectionState()
-    data class Message(val text: String) : EducationalCorrectionState()
 
-    /**
-     * Error recuperable al solicitar una correccion (la IA no respondio o fallo la red).
-     * Cuando [retryText] no es null, la hoja ofrece un boton "Reintentar" que reenvia el
-     * mismo texto (crea una nueva sesion, sin reintento automatico, como pide la doc).
-     */
+    /** Aviso informativo (ámbar), éxito (verde) o sesión (ámbar, manual). */
+    data class Notice(val text: String, val kind: NoticeKind) : EducationalCorrectionState()
+
+    /** Error; con [retryText] se ofrece Reintentar. */
     data class Error(
         val text: String,
         val retryText: ExtractedEducationalText?,

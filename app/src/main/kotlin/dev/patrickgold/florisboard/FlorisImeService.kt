@@ -433,6 +433,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     override fun onWindowHidden() {
         super.onWindowHidden()
         if (windowController.onWindowHidden()) {
+            educationalCorrectionManager.onKeyboardHidden()
             flogInfo(LogTopic.IMS_EVENTS)
             activeState.batchEdit {
                 activeState.imeUiMode = ImeUiMode.TEXT
