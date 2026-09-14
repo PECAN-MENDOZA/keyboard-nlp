@@ -50,6 +50,23 @@ class LoginFlowTest : FunSpec({
         }
     }
 
+    test("a failure while persisting the session never leaves the flow loading") {
+        runTest {
+            val flow = LoginFlow(
+                this,
+                authenticate = { _, _ -> Result.success(session) },
+                onSuccess = { throw IllegalStateException("keystore") },
+            )
+
+            flow.submit("student_001", "1234")
+            advanceUntilIdle()
+
+            flow.state.value.shouldBeInstanceOf<LoginState.Failed>()
+            (flow.state.value as LoginState.Failed).message shouldBe
+                EducationalMessages.login(IllegalStateException("keystore"))
+        }
+    }
+
     test("a second submit while loading is ignored") {
         runTest(StandardTestDispatcher()) {
             val gate = CompletableDeferred<Result<EducationalSession>>()

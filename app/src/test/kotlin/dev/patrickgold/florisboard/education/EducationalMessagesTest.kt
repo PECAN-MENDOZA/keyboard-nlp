@@ -79,6 +79,17 @@ class EducationalMessagesTest : FunSpec({
         test("400 is not retryable") {
             EducationalMessages.isRetryable(EducationalHttpException(400, "")) shouldBe false
         }
+        test("403 is a permission problem and unknown codes include the code") {
+            EducationalMessages.correction(EducationalHttpException(403, "")) shouldBe
+                "No tienes permiso para usar la corrección."
+            EducationalMessages.correction(EducationalHttpException(418, "")) shouldBe
+                "No se pudo corregir (código 418)."
+        }
+    }
+
+    test("recommended label is pluralized") {
+        EducationalMessages.recommendedLabel(1) shouldBe "Recomendada · 1 cambio"
+        EducationalMessages.recommendedLabel(3) shouldBe "Recomendada · 3 cambios"
     }
 
     test("no visible text mentions infrastructure") {
@@ -89,8 +100,33 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.AppNotSupported, EducationalMessages.TextChanged,
             EducationalMessages.AlreadyCorrect, EducationalMessages.Processing,
             EducationalMessages.ProcessingSlow, EducationalMessages.tooLong(5000),
+            EducationalMessages.Corrected, EducationalMessages.Editing,
+            EducationalMessages.recommendedLabel(1), EducationalMessages.recommendedLabel(3),
+            EducationalMessages.AppTitle, EducationalMessages.LoginIntro,
+            EducationalMessages.AliasLabel, EducationalMessages.PinLabel,
+            EducationalMessages.ShowPin, EducationalMessages.HidePin,
+            EducationalMessages.LoginButton, EducationalMessages.LoggingIn,
+            EducationalMessages.KeyboardSettings, EducationalMessages.Logout,
+            EducationalMessages.SessionActive, EducationalMessages.greeting("ana"),
+            EducationalMessages.Connected, EducationalMessages.ConnectedDetail,
+            EducationalMessages.Checking, EducationalMessages.CheckingDetail,
+            EducationalMessages.Unavailable, EducationalMessages.UnavailableDetail,
+            EducationalMessages.Unchecked, EducationalMessages.UncheckedDetail,
+            EducationalMessages.HowToTitle, EducationalMessages.HowTo1,
+            EducationalMessages.HowTo2, EducationalMessages.HowTo3,
+            EducationalMessages.OtherOption, EducationalMessages.EditChip,
+            EducationalMessages.IgnoreChip, EducationalMessages.Retry,
+            EducationalMessages.Undo, EducationalMessages.Done,
+            EducationalMessages.Close, EducationalMessages.CloseDescription,
+            EducationalMessages.AvatarDescription,
         ) + networkErrors.map { EducationalMessages.login(it) } +
-            networkErrors.map { EducationalMessages.correction(it) }
+            networkErrors.map { EducationalMessages.correction(it) } +
+            listOf(400, 401, 403, 404, 418, 502, 503).flatMap { code ->
+                listOf(
+                    EducationalMessages.login(EducationalHttpException(code, "")),
+                    EducationalMessages.correction(EducationalHttpException(code, "")),
+                )
+            }
         all.forEach { text ->
             text shouldNotContainIgnoringCase "cloud run"
             text shouldNotContainIgnoringCase "backend"

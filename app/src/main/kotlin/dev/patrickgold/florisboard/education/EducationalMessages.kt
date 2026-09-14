@@ -41,6 +41,45 @@ object EducationalMessages {
     const val Corrected = "Corregido"
     const val Editing = "Editando"
 
+    // App
+    const val AppTitle = "Teclado adaptativo"
+    const val LoginIntro = "Inicia sesión para usar la corrección con IA."
+    const val AliasLabel = "Alias"
+    const val PinLabel = "PIN"
+    const val ShowPin = "Ver PIN"
+    const val HidePin = "Ocultar PIN"
+    const val LoginButton = "Iniciar sesión"
+    const val LoggingIn = "Iniciando sesión…"
+    const val KeyboardSettings = "Ajustes del teclado"
+    const val Logout = "Cerrar sesión"
+    const val SessionActive = "sesión activa"
+    fun greeting(alias: String): String = "Hola, $alias"
+    const val Connected = "● Conectado"
+    const val ConnectedDetail = "La corrección IA está lista."
+    const val Checking = "⏳ Comprobando…"
+    const val CheckingDetail = "Un momento."
+    const val Unavailable = "○ Sin conexión con el servidor"
+    const val UnavailableDetail = "Toca para volver a intentar."
+    const val Unchecked = "○ Sin comprobar"
+    const val UncheckedDetail = "Toca para comprobar la conexión."
+    const val HowToTitle = "Cómo corregir"
+    const val HowTo1 = "1. Escribe en cualquier app."
+    const val HowTo2 = "2. Sombrea el texto con el dedo."
+    const val HowTo3 = "3. Toca el botón IA del teclado."
+    // Globos
+    const val OtherOption = "Otra opción"
+    const val EditChip = "✎ Editar"
+    const val IgnoreChip = "Dejar como está"
+    const val Retry = "↻ Reintentar"
+    const val Undo = "↶ Deshacer"
+    const val Done = "✓ Listo"
+    const val Close = "✕"
+    const val CloseDescription = "Cerrar"
+    const val AvatarDescription = "Asistente IA. Arrastra para mover las sugerencias"
+
+    fun recommendedLabel(changes: Int): String =
+        if (changes == 1) "Recomendada · 1 cambio" else "Recomendada · $changes cambios"
+
     fun tooLong(max: Int): String = "Sombrea un texto más corto (máximo $max letras)."
 
     fun login(error: Throwable): String = when (error) {

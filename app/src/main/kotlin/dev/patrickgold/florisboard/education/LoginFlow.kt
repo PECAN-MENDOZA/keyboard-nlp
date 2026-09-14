@@ -45,8 +45,9 @@ class LoginFlow(
         scope.launch {
             authenticate(user, pin)
                 .onSuccess { session ->
-                    onSuccess(session)
-                    _state.value = LoginState.Idle
+                    runCatching { onSuccess(session) }
+                        .onSuccess { _state.value = LoginState.Idle }
+                        .onFailure { error -> _state.value = LoginState.Failed(EducationalMessages.login(error)) }
                 }
                 .onFailure { error ->
                     _state.value = LoginState.Failed(EducationalMessages.login(error))

@@ -115,7 +115,7 @@ private fun BubbleAction(label: String, color: Color, onClick: () -> Unit) {
         modifier = Modifier
             .heightIn(min = BubbleTouchMin)
             .widthIn(min = BubbleTouchMin)
-            .semantics { role = Role.Button; contentDescription = if (label == "✕") "Cerrar" else label }
+            .semantics { role = Role.Button; contentDescription = if (label == EducationalMessages.Close) EducationalMessages.CloseDescription else label }
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
@@ -149,14 +149,14 @@ fun CorrectionBubble() {
         }
         is EducationalCorrectionState.Notice -> when (s.kind) {
             NoticeKind.SUCCESS -> BubbleSpec("✓ ${s.text}", null, palette.successSoft, palette.success, emptyList())
-            NoticeKind.INFO -> BubbleSpec(s.text, null, palette.warnSoft, palette.warn, listOf("✕" to manager::dismiss))
-            NoticeKind.SESSION -> BubbleSpec(s.text, null, palette.warnSoft, palette.warn, listOf("✕" to manager::dismiss))
+            NoticeKind.INFO -> BubbleSpec("ⓘ ${s.text}", null, palette.warnSoft, palette.warn, listOf(EducationalMessages.Close to manager::dismiss))
+            NoticeKind.SESSION -> BubbleSpec("ⓘ ${s.text}", null, palette.warnSoft, palette.warn, listOf(EducationalMessages.Close to manager::dismiss))
         }
         is EducationalCorrectionState.Error -> BubbleSpec(
             "! ${s.text}", null, palette.errorSoft, palette.error,
             buildList {
-                if (s.retryText != null) add("↻ Reintentar" to manager::retryCorrection)
-                add("✕" to manager::dismiss)
+                if (s.retryText != null) add(EducationalMessages.Retry to manager::retryCorrection)
+                add(EducationalMessages.Close to manager::dismiss)
             },
         )
         else -> return
@@ -180,7 +180,7 @@ fun CorrectionBubble() {
         ) {
             Column(Modifier.weight(1f)) {
                 Text(text, color = palette.onSurface, fontSize = BubbleTextSize, fontFamily = font)
-                if (detail != null) Text(detail, color = palette.muted, fontSize = 12.sp, fontFamily = font)
+                if (detail != null) Text(detail, color = palette.muted, fontSize = 13.sp, fontFamily = font)
             }
             actions.forEach { (label, onClick) -> BubbleAction(label, ink, onClick) }
         }
@@ -209,9 +209,9 @@ fun ActionStrip() {
 
     val (label, actions) = when (state) {
         is EducationalCorrectionState.Applied ->
-            "✓ ${EducationalMessages.Corrected}" to listOf("↶ Deshacer" to manager::undo)
+            "✓ ${EducationalMessages.Corrected}" to listOf(EducationalMessages.Undo to manager::undo)
         is EducationalCorrectionState.EditingInPlace ->
-            "✎ ${EducationalMessages.Editing}" to listOf("✓ Listo" to manager::finishEdit, "↶ Deshacer" to manager::undo)
+            "✎ ${EducationalMessages.Editing}" to listOf(EducationalMessages.Done to manager::finishEdit, EducationalMessages.Undo to manager::undo)
         else -> return
     }
 

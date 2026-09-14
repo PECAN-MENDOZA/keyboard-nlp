@@ -20,7 +20,7 @@ Marcar cada casilla con la fecha y el resultado.
 - [ ] IA en campo de contraseña (login de cualquier app): "Aquí no se puede usar la corrección." (pendiente)
 - [x] IA con texto ya correcto: globo verde "Tu texto ya está bien escrito" ~3 s; el teclado no se colapsa.
 - [x] IA con la IA detenida (`..\local.ps1 Stop` solo IA): globo rojo "Sin conexión con la IA." con ↻ Reintentar y ✕.
-- [ ] Sesión vencida (borrar token o esperar): globo ámbar "Tu sesión terminó…" con ✕. (pendiente)
+- [ ] Sin sesión iniciada, tocar IA muestra el globo "Inicia sesión en la app del teclado para usar la corrección."; con sesión vencida (borrar token o esperar), "Tu sesión terminó…". Ambos ámbar con ✕. (pendiente)
 
 ## Teclado — globos (probar en Google Keep, WhatsApp y Chrome)
 - [x] Al llegar sugerencias: las teclas desaparecen, la app ocupa toda la pantalla, aparecen avatar + hasta 3 globos con cambios resaltados; el primero dice "Recomendada · N cambios".

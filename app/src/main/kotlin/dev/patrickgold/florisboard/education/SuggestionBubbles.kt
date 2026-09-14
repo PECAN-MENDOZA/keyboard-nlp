@@ -52,7 +52,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -77,7 +79,7 @@ private val SpeechShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, b
 /**
  * Superposición a pantalla completa con el avatar IA y hasta tres globos, uno por opción.
  * Se compone en [dev.patrickgold.florisboard.ime.window.ImeRootWindow] en lugar del teclado
- * cuando [EducationalCorrectionManager.isBubbleMode] es true. Reporta al window controller los
+ * cuando el estado es [EducationalCorrectionState.ShowingSuggestions]. Reporta al window controller los
  * rectángulos tocables; todo lo demás pasa a la app.
  */
 @Composable
@@ -139,7 +141,7 @@ fun SuggestionBubblesOverlay() {
             Box(
                 modifier = Modifier
                     .onGloballyPositioned { report("avatar", it.boundsInRoot().roundToIntRect()) }
-                    .semantics { contentDescription = "Asistente IA. Arrastra para mover las sugerencias" }
+                    .semantics { contentDescription = EducationalMessages.AvatarDescription }
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDrag = { change, drag ->
@@ -179,10 +181,10 @@ fun SuggestionBubblesOverlay() {
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Chip("✎ Editar", palette, Modifier.onGloballyPositioned { report("edit", it.boundsInRoot().roundToIntRect()) }) {
+                    Chip(EducationalMessages.EditChip, palette, Modifier.onGloballyPositioned { report("edit", it.boundsInRoot().roundToIntRect()) }) {
                         options.firstOrNull()?.let { manager.editSuggestion(it) }
                     }
-                    Chip("Dejar como está", palette, Modifier.onGloballyPositioned { report("ignore", it.boundsInRoot().roundToIntRect()) }) {
+                    Chip(EducationalMessages.IgnoreChip, palette, Modifier.onGloballyPositioned { report("ignore", it.boundsInRoot().roundToIntRect()) }) {
                         manager.ignoreSuggestion()
                     }
                 }
@@ -214,13 +216,14 @@ private fun SpeechBubble(
             .heightIn(min = BubbleTouchMin)
             .background(fill, SpeechShape)
             .border(if (recommended) 1.5.dp else 1.dp, ink, SpeechShape)
-            .combinedClickable(onClick = onTap, onLongClick = onLongPress)
+            .semantics { role = Role.Button }
+            .combinedClickable(onClick = onTap, onLongClick = onLongPress, onLongClickLabel = "Editar")
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
         Text(
-            text = if (recommended) "Recomendada · $changes cambios" else "Otra opción",
+            text = if (recommended) EducationalMessages.recommendedLabel(changes) else EducationalMessages.OtherOption,
             color = ink,
-            fontSize = 10.sp,
+            fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             fontFamily = font,
         )
@@ -250,10 +253,11 @@ private fun Chip(label: String, palette: BubblePalette, modifier: Modifier, onCl
             .heightIn(min = BubbleTouchMin)
             .background(palette.surface, RoundedCornerShape(20.dp))
             .border(1.dp, palette.muted.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+            .semantics { role = Role.Button }
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = palette.onSurface, fontSize = 13.sp, fontFamily = bubbleFontFamily())
+        Text(label, color = palette.onSurface, fontSize = BubbleTextSize, fontFamily = bubbleFontFamily())
     }
 }

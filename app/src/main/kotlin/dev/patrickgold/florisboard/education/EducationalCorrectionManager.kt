@@ -105,6 +105,7 @@ class EducationalCorrectionManager(context: Context) {
         clearSession()
         loginFlow.reset()
         reset()
+        _connectionState.value = EducationalBackendConnectionState.Unknown
     }
 
     fun checkBackendConnection() {
@@ -143,9 +144,6 @@ class EducationalCorrectionManager(context: Context) {
         show(EducationalCorrectionState.Notice(EducationalMessages.SelectFirst, NoticeKind.INFO), ONBOARDING_MS)
     }
 
-    /** True cuando las teclas deben ocultarse y los globos flotar sobre la app. */
-    fun isBubbleMode(): Boolean = _state.value is EducationalCorrectionState.ShowingSuggestions
-
     /** Android ocultó el teclado: las burbujas se van con él; el estado se conserva para reaparecer. */
     fun onKeyboardHidden() {
         when (_state.value) {
@@ -168,6 +166,7 @@ class EducationalCorrectionManager(context: Context) {
 
     fun requestCorrection() {
         if (_state.value is EducationalCorrectionState.Processing) return
+        if (_state.value is EducationalCorrectionState.EditingInPlace) finishEdit()
 
         val session = _session.value
         if (session == null) {

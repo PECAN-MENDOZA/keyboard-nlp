@@ -32,9 +32,9 @@ import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.LocalNavController
 import dev.patrickgold.florisboard.app.Routes
+import dev.patrickgold.florisboard.education.EducationalMessages
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.florisboard.lib.util.InputMethodUtils
-import dev.patrickgold.jetpref.datastore.model.collectAsState
 import dev.patrickgold.jetpref.datastore.ui.Preference
 import org.florisboard.lib.compose.FlorisErrorCard
 import org.florisboard.lib.compose.FlorisWarningCard
@@ -42,7 +42,7 @@ import org.florisboard.lib.compose.stringRes
 
 @Composable
 fun KeyboardSettingsScreen() = FlorisScreen {
-    title = "Ajustes del teclado"
+    title = EducationalMessages.KeyboardSettings
     navigationIconVisible = true
     previewFieldVisible = true
 
@@ -50,8 +50,6 @@ fun KeyboardSettingsScreen() = FlorisScreen {
     val context = LocalContext.current
 
     content {
-        val isCollapsed by prefs.internal.homeIsBetaToolboxCollapsed.collectAsState()
-
         val isFlorisBoardEnabled by InputMethodUtils.observeIsFlorisboardEnabled(foregroundOnly = true)
         val isFlorisBoardSelected by InputMethodUtils.observeIsFlorisboardSelected(foregroundOnly = true)
         if (!isFlorisBoardEnabled) {

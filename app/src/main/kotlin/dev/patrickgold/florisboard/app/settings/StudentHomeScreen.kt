@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
@@ -48,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -57,6 +59,7 @@ import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.LocalNavController
 import dev.patrickgold.florisboard.app.Routes
 import dev.patrickgold.florisboard.education.EducationalBackendConnectionState
+import dev.patrickgold.florisboard.education.EducationalMessages
 import dev.patrickgold.florisboard.education.LoginState
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
@@ -72,7 +75,7 @@ import org.florisboard.lib.compose.stringRes
  */
 @Composable
 fun StudentHomeScreen() = FlorisScreen {
-    title = "Teclado adaptativo"
+    title = EducationalMessages.AppTitle
     navigationIconVisible = false
     previewFieldVisible = false
 
@@ -117,7 +120,7 @@ fun StudentHomeScreen() = FlorisScreen {
 
         Preference(
             icon = Icons.Outlined.Keyboard,
-            title = "Ajustes del teclado",
+            title = EducationalMessages.KeyboardSettings,
             onClick = { navController.navigate(Routes.Settings.KeyboardSettings) },
         )
 
@@ -128,7 +131,7 @@ fun StudentHomeScreen() = FlorisScreen {
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
-                Text("Cerrar sesión")
+                Text(EducationalMessages.Logout)
             }
         }
     }
@@ -154,7 +157,7 @@ private fun LoginSection(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Text("Inicia sesión para usar la corrección con IA.")
+        Text(EducationalMessages.LoginIntro)
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = username,
@@ -162,7 +165,7 @@ private fun LoginSection(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isLoading,
-            label = { Text("Alias") },
+            label = { Text(EducationalMessages.AliasLabel) },
         )
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
@@ -171,14 +174,15 @@ private fun LoginSection(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isLoading,
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { onLogin(username, pin) }),
             visualTransformation = if (pinVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            label = { Text("PIN") },
+            label = { Text(EducationalMessages.PinLabel) },
             trailingIcon = {
                 IconButton(onClick = { pinVisible = !pinVisible }) {
                     Icon(
                         imageVector = if (pinVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = if (pinVisible) "Ocultar PIN" else "Ver PIN",
+                        contentDescription = if (pinVisible) EducationalMessages.HidePin else EducationalMessages.ShowPin,
                     )
                 }
             },
@@ -202,7 +206,7 @@ private fun LoginSection(
             enabled = !isLoading,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (isLoading) "Iniciando sesión…" else "Iniciar sesión")
+            Text(if (isLoading) EducationalMessages.LoggingIn else EducationalMessages.LoginButton)
         }
     }
 }
@@ -223,7 +227,7 @@ private fun AccountSection(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Hola, $alias",
+                EducationalMessages.greeting(alias),
                 modifier = Modifier.weight(1f, fill = false),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
@@ -231,14 +235,14 @@ private fun AccountSection(
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.width(8.dp))
-            Text("sesión activa", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+            Text(EducationalMessages.SessionActive, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
         }
         Spacer(Modifier.height(12.dp))
         val (label, detail) = when (connectionState) {
-            is EducationalBackendConnectionState.Connected -> "● Conectado" to "La corrección IA está lista."
-            is EducationalBackendConnectionState.Checking -> "⏳ Comprobando…" to "Un momento."
-            is EducationalBackendConnectionState.Unavailable -> "○ Sin conexión con el servidor" to "Toca para volver a intentar."
-            EducationalBackendConnectionState.Unknown -> "○ Sin comprobar" to "Toca para comprobar la conexión."
+            is EducationalBackendConnectionState.Connected -> EducationalMessages.Connected to EducationalMessages.ConnectedDetail
+            is EducationalBackendConnectionState.Checking -> EducationalMessages.Checking to EducationalMessages.CheckingDetail
+            is EducationalBackendConnectionState.Unavailable -> EducationalMessages.Unavailable to EducationalMessages.UnavailableDetail
+            EducationalBackendConnectionState.Unknown -> EducationalMessages.Unchecked to EducationalMessages.UncheckedDetail
         }
         Card(modifier = Modifier.fillMaxWidth(), onClick = onCheckConnection) {
             Column(Modifier.padding(12.dp)) {
@@ -249,11 +253,11 @@ private fun AccountSection(
         Spacer(Modifier.height(12.dp))
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.padding(12.dp)) {
-                Text("Cómo corregir", fontWeight = FontWeight.SemiBold)
+                Text(EducationalMessages.HowToTitle, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(4.dp))
-                Text("1. Escribe en cualquier app.")
-                Text("2. Sombrea el texto con el dedo.")
-                Text("3. Toca el botón IA del teclado.")
+                Text(EducationalMessages.HowTo1)
+                Text(EducationalMessages.HowTo2)
+                Text(EducationalMessages.HowTo3)
             }
         }
     }
