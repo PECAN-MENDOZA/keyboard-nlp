@@ -19,6 +19,7 @@ package dev.patrickgold.florisboard.education
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -30,10 +31,13 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,12 +52,15 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.roundToIntRect
@@ -63,7 +70,7 @@ import dev.patrickgold.florisboard.ime.window.LocalWindowController
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
-private val AvatarSize = 44.dp
+private val AvatarSize = 48.dp
 private val BubbleMaxWidth = 300.dp
 private val SpeechShape = RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomEnd = 14.dp, bottomStart = 4.dp)
 
@@ -92,8 +99,10 @@ fun SuggestionBubblesOverlay() {
     val defaultY = (configuration.screenHeightDp * 0.55f).roundToInt()
     var offsetX by remember { mutableStateOf(if (savedX >= 0) savedX.toFloat() else 12f) }
     var offsetY by remember { mutableStateOf(if (savedY >= 0) savedY.toFloat() else defaultY.toFloat()) }
-    val maxX = (configuration.screenWidthDp - 120).coerceAtLeast(0).toFloat()
-    val maxY = (configuration.screenHeightDp - 120).coerceAtLeast(0).toFloat()
+    // Tamaño medido del grupo (en dp) para que nunca quede fuera de la pantalla.
+    var groupSizeDp by remember { mutableStateOf(IntSize.Zero) }
+    val maxX = (configuration.screenWidthDp - groupSizeDp.width).coerceAtLeast(0).toFloat()
+    val maxY = (configuration.screenHeightDp - groupSizeDp.height).coerceAtLeast(0).toFloat()
 
     // Rectángulos tocables reportados al window controller (uno por elemento interactivo).
     val touchable = remember { mutableStateOf<Map<String, IntRect>>(emptyMap()) }
@@ -108,10 +117,20 @@ fun SuggestionBubblesOverlay() {
     // Nunca se ofrece como globo una opción idéntica al texto original.
     val options = current.response.displayOptions().filter { it.text != current.extractedText.text }
 
+    LaunchedEffect(maxX, maxY) {
+        offsetX = offsetX.coerceIn(0f, maxX)
+        offsetY = offsetY.coerceIn(0f, maxY)
+    }
+
     Box(Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .offset { with(density) { IntOffset(offsetX.dp.roundToPx(), offsetY.dp.roundToPx()) } }
+                .onGloballyPositioned {
+                    groupSizeDp = with(density) {
+                        IntSize(it.size.width.toDp().value.roundToInt(), it.size.height.toDp().value.roundToInt())
+                    }
+                }
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top,
@@ -120,6 +139,7 @@ fun SuggestionBubblesOverlay() {
             Box(
                 modifier = Modifier
                     .onGloballyPositioned { report("avatar", it.boundsInRoot().roundToIntRect()) }
+                    .semantics { contentDescription = "Asistente IA. Arrastra para mover las sugerencias" }
                     .pointerInput(Unit) {
                         detectDragGestures(
                             onDrag = { change, drag ->
@@ -140,7 +160,12 @@ fun SuggestionBubblesOverlay() {
                 IaAvatar(palette, size = AvatarSize)
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = (configuration.screenHeightDp * 0.6f).dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 options.forEachIndexed { index, option ->
                     val recommended = index == 0
                     SpeechBubble(
@@ -181,6 +206,7 @@ private fun SpeechBubble(
     val changes = SuggestionDiff.changedCount(segments)
     val fill = if (recommended) palette.accentSoft else palette.surface
     val ink = if (recommended) palette.accent else palette.muted
+    val font = bubbleFontFamily()
 
     Column(
         modifier = modifier
@@ -196,6 +222,7 @@ private fun SpeechBubble(
             color = ink,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
+            fontFamily = font,
         )
         Text(
             text = buildAnnotatedString {
@@ -211,22 +238,22 @@ private fun SpeechBubble(
             },
             color = palette.onSurface,
             fontSize = BubbleTextSize,
+            fontFamily = font,
         )
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Chip(label: String, palette: BubblePalette, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier = modifier
-            .heightIn(min = 40.dp)
+            .heightIn(min = BubbleTouchMin)
             .background(palette.surface, RoundedCornerShape(20.dp))
             .border(1.dp, palette.muted.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-            .combinedClickable(onClick = onClick)
+            .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = palette.onSurface, fontSize = 13.sp)
+        Text(label, color = palette.onSurface, fontSize = 13.sp, fontFamily = bubbleFontFamily())
     }
 }

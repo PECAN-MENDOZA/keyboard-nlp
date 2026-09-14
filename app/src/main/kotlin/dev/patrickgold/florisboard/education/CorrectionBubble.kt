@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -43,11 +44,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import kotlinx.coroutines.delay
+import org.florisboard.lib.snygg.ui.LocalSnyggForcedFontFamily
 
 /** Paleta de los globos; se elige según el tema del sistema para leerse en claro y oscuro. */
 data class BubblePalette(
@@ -85,6 +92,10 @@ val BubbleTextSize = 15.sp
 val BubbleTouchMin = 48.dp
 val BubbleShape = RoundedCornerShape(14.dp)
 
+/** Fuente forzada por accesibilidad (OpenDyslexic) que el tema solo aplica a textos Snygg. */
+@Composable
+fun bubbleFontFamily(): FontFamily? = LocalSnyggForcedFontFamily.current
+
 /** Avatar circular "IA" que acompaña a todos los globos. */
 @Composable
 fun IaAvatar(palette: BubblePalette, size: androidx.compose.ui.unit.Dp = 32.dp) {
@@ -94,7 +105,7 @@ fun IaAvatar(palette: BubblePalette, size: androidx.compose.ui.unit.Dp = 32.dp) 
             .background(palette.accent, CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text("IA", color = palette.onAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        Text("IA", color = palette.onAccent, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = bubbleFontFamily())
     }
 }
 
@@ -103,11 +114,13 @@ private fun BubbleAction(label: String, color: Color, onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .heightIn(min = BubbleTouchMin)
+            .widthIn(min = BubbleTouchMin)
+            .semantics { role = Role.Button; contentDescription = if (label == "✕") "Cerrar" else label }
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(label, color = color, fontWeight = FontWeight.SemiBold, fontSize = BubbleTextSize)
+        Text(label, color = color, fontWeight = FontWeight.SemiBold, fontSize = BubbleTextSize, fontFamily = bubbleFontFamily())
     }
 }
 
@@ -122,6 +135,7 @@ fun CorrectionBubble() {
     val manager by context.educationalCorrectionManager()
     val state by manager.state.collectAsState()
     val palette = bubblePalette()
+    val font = bubbleFontFamily()
 
     val (text, detail, fill, ink, actions) = when (val s = state) {
         is EducationalCorrectionState.Processing -> {
@@ -165,8 +179,8 @@ fun CorrectionBubble() {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(Modifier.weight(1f)) {
-                Text(text, color = palette.onSurface, fontSize = BubbleTextSize)
-                if (detail != null) Text(detail, color = palette.muted, fontSize = 12.sp)
+                Text(text, color = palette.onSurface, fontSize = BubbleTextSize, fontFamily = font)
+                if (detail != null) Text(detail, color = palette.muted, fontSize = 12.sp, fontFamily = font)
             }
             actions.forEach { (label, onClick) -> BubbleAction(label, ink, onClick) }
         }
@@ -191,6 +205,7 @@ fun ActionStrip() {
     val manager by context.educationalCorrectionManager()
     val state by manager.state.collectAsState()
     val palette = bubblePalette()
+    val font = bubbleFontFamily()
 
     val (label, actions) = when (state) {
         is EducationalCorrectionState.Applied ->
@@ -208,7 +223,7 @@ fun ActionStrip() {
             .padding(start = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(label, color = palette.onDark, fontSize = BubbleTextSize, modifier = Modifier.weight(1f))
-        actions.forEach { (text, onClick) -> BubbleAction(text, palette.accent, onClick) }
+        Text(label, color = palette.onDark, fontSize = BubbleTextSize, fontFamily = font, modifier = Modifier.weight(1f))
+        actions.forEach { (text, onClick) -> BubbleAction(text, palette.onDark, onClick) }
     }
 }

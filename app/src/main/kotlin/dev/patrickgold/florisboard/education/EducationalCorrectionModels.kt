@@ -43,6 +43,8 @@ data class EducationalSession(
     val userId: String,
     val token: String,
     val expiresAt: String,
+    /** Alias con el que inicio sesion el alumno; vacio en sesiones persistidas antes de existir. */
+    val username: String = "",
 ) {
     /**
      * Indica si el JWT ya vencio segun [expiresAt] (ISO-8601). Permite detectar la

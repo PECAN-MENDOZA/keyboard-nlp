@@ -48,6 +48,7 @@ class EducationalApiRepository {
                 userId = login.userId,
                 token = login.token,
                 expiresAt = login.expiresAt,
+                username = username,
             )
         }
     }

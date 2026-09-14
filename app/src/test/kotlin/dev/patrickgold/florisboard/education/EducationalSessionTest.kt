@@ -38,6 +38,14 @@ class EducationalSessionTest : FunSpec({
     test("an unparseable expiry is treated as not expired so the student is not blocked") {
         session("not-a-date").isExpired(now) shouldBe false
     }
+
+    test("a session persisted before the alias existed decodes with an empty alias") {
+        val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+        val decoded = json.decodeFromString<EducationalSession>(
+            """{"userId":"u1","token":"t","expiresAt":"2099-01-01T00:00:00Z"}""",
+        )
+        decoded.username shouldBe ""
+    }
 })
 
 private fun session(expiresAt: String) = EducationalSession(

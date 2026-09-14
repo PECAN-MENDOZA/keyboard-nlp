@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.LocalNavController
@@ -108,7 +109,7 @@ fun StudentHomeScreen() = FlorisScreen {
             )
         } else {
             AccountSection(
-                alias = activeSession.userId,
+                alias = activeSession.username.ifBlank { activeSession.userId },
                 connectionState = manager.connectionState.collectAsState().value,
                 onCheckConnection = manager::checkBackendConnection,
             )
@@ -221,9 +222,16 @@ private fun AccountSection(
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Hola, $alias", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Hola, $alias",
+                modifier = Modifier.weight(1f, fill = false),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Spacer(Modifier.width(8.dp))
-            Text("sesión activa", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            Text("sesión activa", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, maxLines = 1)
         }
         Spacer(Modifier.height(12.dp))
         val (label, detail) = when (connectionState) {
