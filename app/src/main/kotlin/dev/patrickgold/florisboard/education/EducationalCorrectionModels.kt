@@ -187,3 +187,10 @@ sealed class EducationalBackendConnectionState {
     data class Connected(val baseUrl: String) : EducationalBackendConnectionState()
     data class Unavailable(val message: String) : EducationalBackendConnectionState()
 }
+
+/** Estado exclusivo del formulario de login de la app. Nunca se mezcla con [EducationalCorrectionState]. */
+sealed class LoginState {
+    object Idle : LoginState()
+    object Loading : LoginState()
+    data class Failed(val message: String) : LoginState()
+}

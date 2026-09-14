@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.education.EducationalCorrectionState
+import dev.patrickgold.florisboard.education.LoginState
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.jetpref.datastore.ui.PreferenceGroup
@@ -60,7 +61,8 @@ fun EducationScreen() = FlorisScreen {
         val educationalCorrectionManager by context.educationalCorrectionManager()
         val state by educationalCorrectionManager.state.collectAsState()
         val session by educationalCorrectionManager.session.collectAsState()
-        val isLoggingIn by educationalCorrectionManager.isLoggingIn.collectAsState()
+        val loginState by educationalCorrectionManager.loginState.collectAsState()
+        val isLoggingIn = loginState is LoginState.Loading
         // Una sesion vencida no cuenta como activa: hay que iniciar sesion de nuevo.
         val activeSession = session?.takeUnless { it.isExpired() }
 
@@ -145,9 +147,9 @@ fun EducationScreen() = FlorisScreen {
                 ) {
                     Text("Cerrar sesión")
                 }
-                if (state is EducationalCorrectionState.Message) {
+                (loginState as? LoginState.Failed)?.let {
                     Spacer(Modifier.height(12.dp))
-                    Text((state as EducationalCorrectionState.Message).text)
+                    Text(it.message)
                 }
             }
         }

@@ -55,8 +55,16 @@ class EducationalCorrectionManager(context: Context) {
     private val _session = MutableStateFlow(loadValidSession())
     val session: StateFlow<EducationalSession?> = _session
 
-    private val _isLoggingIn = MutableStateFlow(false)
-    val isLoggingIn: StateFlow<Boolean> = _isLoggingIn
+    private val loginFlow = LoginFlow(
+        scope = scope,
+        authenticate = { username, pin ->
+            EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
+                repository.login(baseUrl = baseUrl, username = username, password = pin)
+            }
+        },
+        onSuccess = ::persistSession,
+    )
+    val loginState: StateFlow<LoginState> = loginFlow.state
 
     private fun loadValidSession(): EducationalSession? {
         val stored = sessionStore.load() ?: return null
@@ -121,35 +129,11 @@ class EducationalCorrectionManager(context: Context) {
         scope.launch { prefs.accessibility.onboardingHintShown.set(true) }
     }
 
-    fun login(username: String, password: String) {
-        if (_isLoggingIn.value) return
-        if (username.isBlank() || password.isBlank()) {
-            _state.value = EducationalCorrectionState.Message(EducationalMessages.EmptyCredentials)
-            return
-        }
-        _isLoggingIn.value = true
-        _state.value = EducationalCorrectionState.Message("Iniciando sesión...")
-        scope.launch {
-            val result = EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
-                repository.login(
-                    baseUrl = baseUrl,
-                    username = username.trim(),
-                    password = password,
-                )
-            }
-            result.onSuccess { session ->
-                persistSession(session)
-                _state.value = EducationalCorrectionState.Message("Sesión iniciada.")
-            }.onFailure { error ->
-                _state.value = EducationalCorrectionState.Message(EducationalMessages.login(error))
-            }
-            _isLoggingIn.value = false
-        }
-    }
+    fun login(username: String, pin: String) = loginFlow.submit(username, pin)
 
     fun logout() {
         clearSession()
-        _state.value = EducationalCorrectionState.Message("Sesión educativa cerrada.")
+        loginFlow.reset()
     }
 
     fun requestCorrection() {
