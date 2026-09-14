@@ -188,6 +188,15 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
             key = "accessibility__onboarding_hint_shown",
             default = false,
         )
+        // Posición arrastrada de los globos de sugerencias (dp desde arriba-izquierda). -1 = por defecto.
+        val bubbleOffsetXDp = int(
+            key = "accessibility__bubble_offset_x_dp",
+            default = -1,
+        )
+        val bubbleOffsetYDp = int(
+            key = "accessibility__bubble_offset_y_dp",
+            default = -1,
+        )
     }
 
     val devtools = Devtools()

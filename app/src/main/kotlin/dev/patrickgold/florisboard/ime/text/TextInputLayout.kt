@@ -29,6 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.education.ActionStrip
+import dev.patrickgold.florisboard.education.CorrectionBubble
 import dev.patrickgold.florisboard.ime.smartbar.IncognitoDisplayMode
 import dev.patrickgold.florisboard.ime.smartbar.InlineSuggestionsStyleCache
 import dev.patrickgold.florisboard.ime.smartbar.Smartbar
@@ -58,6 +60,10 @@ fun TextInputLayout(
             .fillMaxWidth()
             .wrapContentHeight(),
     ) {
+        // Globo de estado (procesando / aviso / error) y tira de acciones (Deshacer / Listo)
+        // apilados sobre la Smartbar. Las sugerencias no van aquí: flotan sobre la app.
+        CorrectionBubble()
+        ActionStrip()
         Smartbar()
         if (state.isActionsOverflowVisible) {
             QuickActionsOverflowPanel()
