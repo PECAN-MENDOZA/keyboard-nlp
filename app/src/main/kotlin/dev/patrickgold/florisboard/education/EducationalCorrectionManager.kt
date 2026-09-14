@@ -23,7 +23,6 @@ import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.editorInstance
 import dev.patrickgold.florisboard.ime.editor.EditorContent
 import dev.patrickgold.florisboard.ime.editor.EditorRange
-import dev.patrickgold.florisboard.ime.editor.FlorisEditorInfo
 import dev.patrickgold.florisboard.keyboardManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +32,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class EducationalCorrectionManager(context: Context) {
     private val editorInstance by context.editorInstance()
@@ -43,6 +44,7 @@ class EducationalCorrectionManager(context: Context) {
     private val prefs by FlorisPreferenceStore
     private var lastPrewarmAtMs: Long = 0L
     private var autoDismissJob: Job? = null
+    private val feedbackMutex = Mutex()
 
     private val _state = MutableStateFlow<EducationalCorrectionState>(EducationalCorrectionState.Idle)
     val state: StateFlow<EducationalCorrectionState> = _state
@@ -68,27 +70,12 @@ class EducationalCorrectionManager(context: Context) {
     )
     val loginState: StateFlow<LoginState> = loginFlow.state
 
-    // Campo donde se pidió la última corrección. Si el alumno pasa a otro campo u otra app, se
-    // limpia; si solo se ocultó el teclado (info Unspecified) se conserva para reaparecer.
-    private var correctionFieldKey: String? = null
-
     init {
-        scope.launch {
-            editorInstance.activeInfoFlow.collect { info ->
-                if (info === FlorisEditorInfo.Unspecified) return@collect
-                val key = fieldKey(info)
-                if (correctionFieldKey != null && key != correctionFieldKey) reset()
-            }
-        }
         // Mientras hay algo aplicado o en edición, cada cambio de contenido se contrasta con el ancla.
         scope.launch {
             editorInstance.activeContentFlow.collect { content -> onContentChanged(content) }
         }
     }
-
-    // FlorisEditorInfo no es data class: se compara por paquete, id de campo y tipo.
-    private fun fieldKey(info: FlorisEditorInfo): String =
-        "${info.base.packageName}/${info.base.fieldId}/${info.base.inputType}"
 
     private fun loadValidSession(): EducationalSession? {
         val stored = sessionStore.load() ?: return null
@@ -162,10 +149,19 @@ class EducationalCorrectionManager(context: Context) {
     /** Android ocultó el teclado: las burbujas se van con él; el estado se conserva para reaparecer. */
     fun onKeyboardHidden() {
         when (_state.value) {
-            is EducationalCorrectionState.Applied,
+            is EducationalCorrectionState.Applied -> reset()
             is EducationalCorrectionState.EditingInPlace -> finishEdit()
             else -> Unit
         }
+    }
+
+    /**
+     * Android inició la entrada en un campo NUEVO (otro campo u otra app): cualquier corrección
+     * en curso deja de tener sentido. Un restart del mismo campo (restarting = true) y volver a
+     * mostrar el teclado no pasan por aquí, así que los globos reaparecen en el mismo campo.
+     */
+    fun onInputFieldChanged() {
+        if (_state.value is EducationalCorrectionState.EditingInPlace) finishEdit() else reset()
     }
 
     // ---- Solicitud ------------------------------------------------------------------------
@@ -210,7 +206,6 @@ class EducationalCorrectionManager(context: Context) {
     private fun runCorrection(extractedText: ExtractedEducationalText) {
         val processing = EducationalCorrectionState.Processing(extractedText, SystemClock.elapsedRealtime())
         show(processing)
-        correctionFieldKey = fieldKey(editorInstance.activeInfo)
         scope.launch {
             val activeSession = currentSession()
             if (activeSession == null) {
@@ -302,6 +297,8 @@ class EducationalCorrectionManager(context: Context) {
             is EducationalCorrectionState.EditingInPlace -> {
                 val known = current.lastKnown
                 if (!editorInstance.replaceRangeIfUnchanged(known.range, known.text, current.extractedText.text)) {
+                    // El texto ya no coincide: se cierra la edición con su feedback y se avisa.
+                    finishEdit()
                     show(EducationalCorrectionState.Notice(EducationalMessages.TextChanged, NoticeKind.INFO), NOTICE_MS)
                     return
                 }
@@ -343,6 +340,7 @@ class EducationalCorrectionManager(context: Context) {
     }
 
     private fun onContentChanged(content: EditorContent) {
+        if (content.offset < 0) return
         when (val current = _state.value) {
             is EducationalCorrectionState.Applied -> {
                 // Cualquier tecla tras aplicar retira la tira de Deshacer sin más. Justo después de
@@ -355,7 +353,13 @@ class EducationalCorrectionManager(context: Context) {
             }
             is EducationalCorrectionState.EditingInPlace -> {
                 when (val tracked = InPlaceEditTracker.resolve(current.anchor, content)) {
-                    is TrackedRange.Inside -> _state.value = current.copy(lastKnown = tracked)
+                    is TrackedRange.Inside -> {
+                        // Eco intermedio del editor (texto original con la selección original) antes
+                        // de que confirme el commit: no es una edición del alumno, se ignora.
+                        val preCommitEcho = tracked.text == current.extractedText.text &&
+                            current.lastKnown.text == current.baseSuggestion
+                        if (!preCommitEcho) _state.value = current.copy(lastKnown = tracked)
+                    }
                     TrackedRange.Lost -> finishEdit()
                 }
             }
@@ -376,7 +380,6 @@ class EducationalCorrectionManager(context: Context) {
 
     private fun reset() {
         autoDismissJob?.cancel()
-        correctionFieldKey = null
         _state.value = EducationalCorrectionState.Idle
     }
 
@@ -387,18 +390,22 @@ class EducationalCorrectionManager(context: Context) {
         finalText: String? = null,
         reason: String? = null,
     ) {
+        // Mutex FIFO: los envíos se completan en el orden en que se lanzaron (p. ej. aceptar
+        // antes que UNDO), aunque la primera petición sea lenta.
         scope.launch {
-            val session = currentSession() ?: return@launch
-            EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
-                repository.sendFeedback(
-                    baseUrl = baseUrl,
-                    token = session.token,
-                    sessionId = response.sessionId,
-                    selectedSuggestion = selectedSuggestion,
-                    accepted = accepted,
-                    finalText = finalText,
-                    reason = reason,
-                )
+            feedbackMutex.withLock {
+                val session = currentSession() ?: return@launch
+                EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
+                    repository.sendFeedback(
+                        baseUrl = baseUrl,
+                        token = session.token,
+                        sessionId = response.sessionId,
+                        selectedSuggestion = selectedSuggestion,
+                        accepted = accepted,
+                        finalText = finalText,
+                        reason = reason,
+                    )
+                }
             }
         }
     }

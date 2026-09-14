@@ -86,4 +86,28 @@ class InPlaceEditTrackerTest : FunSpec({
         InPlaceEditTracker.anchor(content(original, cursor = 0, offset = -1), EditorRange(11, 24)) shouldBe null
         InPlaceEditTracker.anchor(content(original, cursor = 0), EditorRange(11, 99)) shouldBe null
     }
+
+    test("a selection covering the original range resolves to the whole original text") {
+        val now = "Hoy fui al parque i jugé y volví."
+        val selected = EditorContent(
+            text = now, offset = 0,
+            localSelection = EditorRange(11, 24),
+            localComposing = EditorRange.Unspecified, localCurrentWord = EditorRange.Unspecified,
+        )
+        InPlaceEditTracker.resolve(anchor, selected) shouldBe
+            TrackedRange.Inside("parque i jugé", EditorRange(11, 24))
+    }
+
+    test("a short suffix that also occurs inside the selection does not truncate it") {
+        val src = "hola como estas "
+        val whole = EditorContent(
+            text = src, offset = 0,
+            localSelection = EditorRange(0, 15),
+            localComposing = EditorRange.Unspecified, localCurrentWord = EditorRange.Unspecified,
+        )
+        val a = InPlaceEditTracker.anchor(whole, EditorRange(0, 15))!!
+        a.suffix shouldBe " "
+        InPlaceEditTracker.resolve(a, whole) shouldBe
+            TrackedRange.Inside("hola como estas", EditorRange(0, 15))
+    }
 })

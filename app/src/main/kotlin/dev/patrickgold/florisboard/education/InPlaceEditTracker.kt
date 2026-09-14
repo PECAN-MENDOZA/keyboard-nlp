@@ -58,9 +58,10 @@ object InPlaceEditTracker {
         val n = minOf(before.length, anchor.prefix.length)
         if (before.takeLast(n) != anchor.prefix.takeLast(n)) return TrackedRange.Lost
 
-        // El cursor vive dentro del rango mientras se edita; el sufijo real empieza en el cursor
-        // o después, así que buscar desde ahí evita falsos positivos con texto recién escrito.
-        val cursor = content.localSelection.start
+        // Con una selección, el final de la edición no puede estar antes de su fin; con cursor
+        // simple start == end. Buscar desde ahí evita falsos positivos con el eco intermedio
+        // (selección = rango original) y con texto recién escrito.
+        val cursor = content.localSelection.end
         if (cursor < localStart || cursor > text.length) return TrackedRange.Lost
 
         val localEnd = if (anchor.suffix.isEmpty()) {
