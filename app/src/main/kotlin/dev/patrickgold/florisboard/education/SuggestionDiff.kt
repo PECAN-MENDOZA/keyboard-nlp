@@ -62,4 +62,15 @@ object SuggestionDiff {
     }
 
     fun changedCount(segments: List<DiffSegment>): Int = segments.count { it.changed }
+
+    /**
+     * Número de cambios entre original y sugerencia: palabras marcadas en la sugerencia más
+     * palabras del original que desaparecieron (borrados no dejan segmento, pero sí son cambio).
+     */
+    fun countChanges(original: String, suggestion: String): Int {
+        val segments = compute(original, suggestion)
+        val originalWords = original.split(Regex("""\s+""")).count { it.isNotEmpty() }
+        val keptWords = segments.count { !it.changed && it.text.isNotBlank() }
+        return maxOf(changedCount(segments), originalWords - keptWords)
+    }
 }

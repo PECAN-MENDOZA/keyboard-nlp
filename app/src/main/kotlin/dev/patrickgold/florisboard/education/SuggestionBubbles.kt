@@ -203,7 +203,7 @@ private fun SpeechBubble(
     onLongPress: () -> Unit,
 ) {
     val segments = remember(original, option.text) { SuggestionDiff.compute(original, option.text) }
-    val changes = SuggestionDiff.changedCount(segments)
+    val changes = remember(original, option.text) { SuggestionDiff.countChanges(original, option.text) }
     val fill = if (recommended) palette.accentSoft else palette.surface
     val ink = if (recommended) palette.accent else palette.muted
     val font = bubbleFontFamily()

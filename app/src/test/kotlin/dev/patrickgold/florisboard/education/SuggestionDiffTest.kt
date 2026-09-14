@@ -45,4 +45,16 @@ class SuggestionDiffTest : FunSpec({
     test("empty suggestion yields no segments") {
         SuggestionDiff.compute("algo", "") shouldBe emptyList()
     }
+
+    test("countChanges counts a deleted word as one change") {
+        SuggestionDiff.countChanges("fui al parque felices", "fui al parque") shouldBe 1
+    }
+
+    test("countChanges counts substitutions plus deletions") {
+        SuggestionDiff.countChanges("parque i jugé con mis amijos hoy", "parque y jugué con mis amigos") shouldBe 4
+    }
+
+    test("countChanges is zero for identical texts") {
+        SuggestionDiff.countChanges("todo bien", "todo bien") shouldBe 0
+    }
 })
