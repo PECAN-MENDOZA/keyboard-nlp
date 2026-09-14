@@ -48,6 +48,7 @@ class EducationalApiRepository {
                 userId = login.userId,
                 token = login.token,
                 expiresAt = login.expiresAt,
+                username = username,
             )
         }
     }
@@ -76,6 +77,7 @@ class EducationalApiRepository {
         selectedSuggestion: String?,
         accepted: Boolean,
         finalText: String? = null,
+        reason: String? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             request(
@@ -84,7 +86,7 @@ class EducationalApiRepository {
                 method = "PATCH",
                 token = token,
                 body = json.encodeToString(
-                    CorrectionFeedbackRequest(selectedSuggestion, accepted, finalText),
+                    CorrectionFeedbackRequest(selectedSuggestion, accepted, finalText, reason),
                 ),
             )
             Unit

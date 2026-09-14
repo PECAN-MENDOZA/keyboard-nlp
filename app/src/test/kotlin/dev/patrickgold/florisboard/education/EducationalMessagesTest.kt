@@ -1,0 +1,136 @@
+/*
+ * Copyright (C) 2026 The FlorisBoard Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package dev.patrickgold.florisboard.education
+
+import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldNotContainIgnoringCase
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+
+class EducationalMessagesTest : FunSpec({
+    val networkErrors = listOf(
+        ConnectException("x"), NoRouteToHostException("x"),
+        SocketTimeoutException("x"), UnknownHostException("x"),
+    )
+
+    context("login") {
+        test("401 and 403 mean wrong credentials, never an expired session") {
+            EducationalMessages.login(EducationalHttpException(401, "")) shouldBe
+                "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
+            EducationalMessages.login(EducationalHttpException(403, "")) shouldBe
+                "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
+        }
+        test("5xx is a server problem") {
+            EducationalMessages.login(EducationalHttpException(503, "")) shouldBe
+                "El servidor tuvo un problema. Inténtalo en unos minutos."
+        }
+        test("any network failure asks to check the connection") {
+            networkErrors.forEach { error ->
+                EducationalMessages.login(error) shouldBe
+                    "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo."
+            }
+        }
+        test("a non-student account keeps the repository message") {
+            EducationalMessages.login(IllegalArgumentException("La cuenta no pertenece a un estudiante.")) shouldBe
+                "La cuenta no pertenece a un estudiante."
+        }
+        test("unknown http codes include the code") {
+            EducationalMessages.login(EducationalHttpException(418, "")) shouldBe
+                "No se pudo iniciar sesión (código 418)."
+        }
+    }
+
+    context("correction") {
+        test("400 asks for another fragment") {
+            EducationalMessages.correction(EducationalHttpException(400, "")) shouldBe
+                "No pudimos corregir ese texto. Intenta con otro fragmento."
+        }
+        test("401 is an expired session") {
+            EducationalMessages.correction(EducationalHttpException(401, "")) shouldBe
+                EducationalMessages.SessionExpired
+        }
+        test("404 asks to select again") {
+            EducationalMessages.correction(EducationalHttpException(404, "")) shouldBe
+                "Esa corrección ya no está disponible. Sombrea y toca IA otra vez."
+        }
+        test("502 and network failures are the same short message and retryable") {
+            (networkErrors + EducationalHttpException(502, "")).forEach { error ->
+                EducationalMessages.correction(error) shouldBe "Sin conexión con la IA."
+                EducationalMessages.isRetryable(error) shouldBe true
+            }
+        }
+        test("400 is not retryable") {
+            EducationalMessages.isRetryable(EducationalHttpException(400, "")) shouldBe false
+        }
+        test("403 is a permission problem and unknown codes include the code") {
+            EducationalMessages.correction(EducationalHttpException(403, "")) shouldBe
+                "No tienes permiso para usar la corrección."
+            EducationalMessages.correction(EducationalHttpException(418, "")) shouldBe
+                "No se pudo corregir (código 418)."
+        }
+    }
+
+    test("recommended label is pluralized") {
+        EducationalMessages.recommendedLabel(1) shouldBe "Recomendada · 1 cambio"
+        EducationalMessages.recommendedLabel(3) shouldBe "Recomendada · 3 cambios"
+    }
+
+    test("no visible text mentions infrastructure") {
+        val all = listOf(
+            EducationalMessages.EmptyCredentials, EducationalMessages.NoSession,
+            EducationalMessages.SessionExpired, EducationalMessages.AiUnavailable,
+            EducationalMessages.SelectFirst, EducationalMessages.NotAllowedHere,
+            EducationalMessages.AppNotSupported, EducationalMessages.TextChanged,
+            EducationalMessages.AlreadyCorrect, EducationalMessages.Processing,
+            EducationalMessages.ProcessingSlow, EducationalMessages.tooLong(5000),
+            EducationalMessages.Corrected, EducationalMessages.Editing,
+            EducationalMessages.recommendedLabel(1), EducationalMessages.recommendedLabel(3),
+            EducationalMessages.AppTitle, EducationalMessages.LoginIntro,
+            EducationalMessages.AliasLabel, EducationalMessages.PinLabel,
+            EducationalMessages.ShowPin, EducationalMessages.HidePin,
+            EducationalMessages.LoginButton, EducationalMessages.LoggingIn,
+            EducationalMessages.KeyboardSettings, EducationalMessages.Logout,
+            EducationalMessages.SessionActive, EducationalMessages.greeting("ana"),
+            EducationalMessages.Connected, EducationalMessages.ConnectedDetail,
+            EducationalMessages.Checking, EducationalMessages.CheckingDetail,
+            EducationalMessages.Unavailable, EducationalMessages.UnavailableDetail,
+            EducationalMessages.Unchecked, EducationalMessages.UncheckedDetail,
+            EducationalMessages.HowToTitle, EducationalMessages.HowTo1,
+            EducationalMessages.HowTo2, EducationalMessages.HowTo3,
+            EducationalMessages.OtherOption, EducationalMessages.EditChip,
+            EducationalMessages.IgnoreChip, EducationalMessages.Retry,
+            EducationalMessages.Undo, EducationalMessages.Done,
+            EducationalMessages.Close, EducationalMessages.CloseDescription,
+            EducationalMessages.AvatarDescription,
+        ) + networkErrors.map { EducationalMessages.login(it) } +
+            networkErrors.map { EducationalMessages.correction(it) } +
+            listOf(400, 401, 403, 404, 418, 502, 503).flatMap { code ->
+                listOf(
+                    EducationalMessages.login(EducationalHttpException(code, "")),
+                    EducationalMessages.correction(EducationalHttpException(code, "")),
+                )
+            }
+        all.forEach { text ->
+            text shouldNotContainIgnoringCase "cloud run"
+            text shouldNotContainIgnoringCase "backend"
+            text shouldNotContainIgnoringCase "desplegado"
+        }
+    }
+})

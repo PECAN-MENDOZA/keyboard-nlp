@@ -18,6 +18,7 @@ package dev.patrickgold.florisboard.ime.window
 
 import android.content.res.Configuration
 import android.inputmethodservice.InputMethodService
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.height
 import androidx.compose.ui.unit.max
 import androidx.compose.ui.unit.min
@@ -100,6 +101,18 @@ class ImeWindowController(
      */
     val isWindowShown: StateFlow<Boolean>
         field = MutableStateFlow(false)
+
+    /**
+     * Rectángulos tocables (en px del root) de la superposición de globos. Null = superposición
+     * apagada. Mientras está encendida, la app recupera toda la altura y solo estos rectángulos
+     * reciben toques; el resto pasa a la app.
+     */
+    val overlayTouchableRects: StateFlow<List<IntRect>?>
+        field = MutableStateFlow<List<IntRect>?>(null)
+
+    fun setOverlayTouchableRects(rects: List<IntRect>?) {
+        overlayTouchableRects.value = rects
+    }
 
     private val updateConfigMutex = Mutex()
 
@@ -206,8 +219,18 @@ class ImeWindowController(
         isFullscreenInputRequired: Boolean,
     ) {
         val rootInsets = activeRootInsets.value
-        val windowInsets = activeWindowInsets.value ?: return
         val rootBounds = rootInsets.boundsPx
+        overlayTouchableRects.value?.let { rects ->
+            outInsets.contentTopInsets = rootBounds.bottom
+            outInsets.visibleTopInsets = rootBounds.bottom
+            outInsets.touchableRegion.setEmpty()
+            rects.forEach { r ->
+                outInsets.touchableRegion.union(android.graphics.Rect(r.left, r.top, r.right, r.bottom))
+            }
+            outInsets.touchableInsets = InputMethodService.Insets.TOUCHABLE_INSETS_REGION
+            return
+        }
+        val windowInsets = activeWindowInsets.value ?: return
         val windowBounds = windowInsets.boundsPx
         val windowSpec = activeWindowSpec.value
         val editorState = editor.state.value

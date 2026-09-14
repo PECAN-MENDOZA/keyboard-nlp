@@ -29,7 +29,6 @@ import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.appContext
 import dev.patrickgold.florisboard.clipboardManager
 import dev.patrickgold.florisboard.editorInstance
-import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.extensionManager
 import dev.patrickgold.florisboard.ime.ImeUiMode
 import dev.patrickgold.florisboard.ime.core.DisplayLanguageNamesIn
@@ -88,7 +87,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     private val appContext by context.appContext()
     private val clipboardManager by context.clipboardManager()
     private val editorInstance by context.editorInstance()
-    private val educationalCorrectionManager by context.educationalCorrectionManager()
     private val extensionManager by context.extensionManager()
     private val nlpManager by context.nlpManager()
     private val subtypeManager by context.subtypeManager()
@@ -672,12 +670,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     override fun onInputKeyDown(data: KeyData) {
         val windowController = FlorisImeService.windowControllerOrNull()
         windowController?.editor?.disableIfNoGestureInProgress()
-        // En edición del buffer educativo no tocamos la selección de la app; solo dejamos que SHIFT
-        // siga funcionando para poder escribir mayúsculas en el buffer.
-        if (educationalCorrectionManager.isEditingBuffer()) {
-            if (data.code == KeyCode.SHIFT) handleShiftDown(data)
-            return
-        }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -695,12 +687,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
 
     override fun onInputKeyUp(data: KeyData) = activeState.batchEdit {
         val windowController = FlorisImeService.windowControllerOrNull() ?: return@batchEdit
-        // En edición del buffer educativo, las teclas de texto/borrado/cursor van al buffer del
-        // panel, no al campo de la app. Las no consumidas (cambio de modo, símbolos) siguen normal.
-        if (educationalCorrectionManager.isEditingBuffer() && handleEducationalEditKey(data)) {
-            resetShiftAfterChar()
-            return@batchEdit
-        }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -819,10 +805,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     }
 
     override fun onInputKeyCancel(data: KeyData) {
-        if (educationalCorrectionManager.isEditingBuffer()) {
-            if (data.code == KeyCode.SHIFT) handleShiftCancel()
-            return
-        }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -840,10 +822,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
 
     override fun onInputKeyRepeat(data: KeyData) {
         FlorisImeService.inputFeedbackController()?.keyRepeatedAction(data)
-        if (educationalCorrectionManager.isEditingBuffer()) {
-            onInputKeyUp(data)
-            return
-        }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -854,46 +832,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
             KeyCode.MOVE_START_OF_LINE,
             KeyCode.MOVE_END_OF_LINE -> handleArrow(data.code)
             else -> onInputKeyUp(data)
-        }
-    }
-
-    /**
-     * Enruta una tecla al buffer de edición educativa. Devuelve true si la consumió (texto, borrado,
-     * espacio, cursor); false para teclas que deben seguir su curso normal (SHIFT, cambio de modo).
-     */
-    private fun handleEducationalEditKey(data: KeyData): Boolean {
-        when (data.code) {
-            KeyCode.DELETE -> {
-                educationalCorrectionManager.bufferBackspace()
-                return true
-            }
-            KeyCode.SPACE -> {
-                educationalCorrectionManager.bufferInsert(" ")
-                return true
-            }
-            KeyCode.ARROW_LEFT -> {
-                educationalCorrectionManager.bufferMoveCursor(-1)
-                return true
-            }
-            KeyCode.ARROW_RIGHT -> {
-                educationalCorrectionManager.bufferMoveCursor(1)
-                return true
-            }
-            KeyCode.ENTER -> return true
-        }
-        if (data.type == KeyType.CHARACTER || data.type == KeyType.NUMERIC) {
-            educationalCorrectionManager.bufferInsert(data.asString(isForDisplay = false))
-            return true
-        }
-        return false
-    }
-
-    /** Replica el reset de shift tras escribir un carácter (equivalente al final de onInputKeyUp). */
-    private fun resetShiftAfterChar() {
-        if (activeState.inputShiftState != InputShiftState.CAPS_LOCK &&
-            !inputEventDispatcher.isPressed(KeyCode.SHIFT)
-        ) {
-            activeState.inputShiftState = InputShiftState.UNSHIFTED
         }
     }
 

@@ -361,6 +361,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     override fun onStartInput(info: EditorInfo?, restarting: Boolean) {
         flogInfo { "restarting=$restarting info=${info?.debugSummarize()}" }
         super.onStartInput(info, restarting)
+        if (!restarting) educationalCorrectionManager.onInputFieldChanged()
         if (info == null) return
         val editorInfo = FlorisEditorInfo.wrap(info)
         editorInstance.handleStartInput(editorInfo)
@@ -433,6 +434,7 @@ class FlorisImeService : LifecycleInputMethodService() {
     override fun onWindowHidden() {
         super.onWindowHidden()
         if (windowController.onWindowHidden()) {
+            educationalCorrectionManager.onKeyboardHidden()
             flogInfo(LogTopic.IMS_EVENTS)
             activeState.batchEdit {
                 activeState.imeUiMode = ImeUiMode.TEXT

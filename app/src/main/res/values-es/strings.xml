@@ -416,8 +416,6 @@
     <string name="pref__keyboard__space_bar_switches_to_characters__label" comment="Preference title">La barra espaciadora cambia a caracteres</string>
     <string name="pref__keyboard__space_bar_switches_to_characters__summary" comment="Preference summary">Automáticamente regresa a los caracteres al estar en teclado numérico o de símbolos</string>
     <string name="pref__keyboard__incognito_indicator__label" comment="Preference title">Indicador de incógnito</string>
-    <!-- Education strings -->
-    <string name="settings__education__title" comment="Title of the educational AI correction settings screen">Educación</string>
     <string name="accessibility__group__title">Accesibilidad</string>
     <string name="accessibility__dyslexia_font__label">Fuente para dislexia</string>
     <string name="accessibility__dyslexia_font__summary">Letras más fáciles de leer (OpenDyslexic).</string>

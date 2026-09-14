@@ -463,8 +463,6 @@
     <string name="pref__keyboard__space_bar_switches_to_characters__summary" comment="Preference summary">Automatically switches back to characters when in symbols or numeric</string>
     <string name="pref__keyboard__incognito_indicator__label" comment="Preference title">Incognito indicator</string>
 
-    <!-- Education strings -->
-    <string name="settings__education__title" comment="Title of the educational AI correction settings screen">Education</string>
     <string name="accessibility__group__title">Accessibility</string>
     <string name="accessibility__dyslexia_font__label">Dyslexia font</string>
     <string name="accessibility__dyslexia_font__summary">Easier-to-read letters (OpenDyslexic).</string>

@@ -27,25 +27,25 @@ object EducationalPrivacyPolicy {
         session: EducationalSession?,
     ): String? {
         if (session == null) {
-            return "Inicia sesión para usar la corrección IA."
+            return EducationalMessages.NoSession
         }
         if (editorInfo.isRawInputEditor) {
-            return "Esta aplicación no entrega texto suficiente para corregir."
+            return EducationalMessages.AppNotSupported
         }
         if (keyboardState.isIncognitoMode || editorInfo.imeOptions.flagNoPersonalizedLearning) {
-            return "La corrección IA está bloqueada en modo privado."
+            return EducationalMessages.NotAllowedHere
         }
         val variation = editorInfo.inputAttributes.variation
         if (variation == InputAttributes.Variation.PASSWORD ||
             variation == InputAttributes.Variation.VISIBLE_PASSWORD ||
             variation == InputAttributes.Variation.WEB_PASSWORD
         ) {
-            return "La corrección IA está bloqueada en campos de contraseña."
+            return EducationalMessages.NotAllowedHere
         }
         if (editorInfo.inputAttributes.type == InputAttributes.Type.NUMBER &&
             variation == InputAttributes.Variation.PASSWORD
         ) {
-            return "La corrección IA está bloqueada en campos sensibles."
+            return EducationalMessages.NotAllowedHere
         }
         return null
     }

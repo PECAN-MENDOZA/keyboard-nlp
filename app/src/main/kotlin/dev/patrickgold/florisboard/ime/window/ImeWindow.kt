@@ -58,6 +58,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.roundToIntRect
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.devtools.DevtoolsOverlay
+import dev.patrickgold.florisboard.education.EducationalCorrectionState
+import dev.patrickgold.florisboard.education.SuggestionBubblesOverlay
+import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.ime.input.LocalInputFeedbackController
 import dev.patrickgold.florisboard.ime.keyboard.ProvideKeyboardRowBaseHeight
 import dev.patrickgold.florisboard.ime.sheet.BottomSheetWindow
@@ -101,6 +104,11 @@ fun ImeRootWindow() {
         }
     }
 
+    val context = LocalContext.current
+    val educationalCorrectionManager by context.educationalCorrectionManager()
+    val correctionState by educationalCorrectionManager.state.collectAsState()
+    val isBubbleMode = correctionState is EducationalCorrectionState.ShowingSuggestions
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -118,8 +126,13 @@ fun ImeRootWindow() {
             },
     ) {
         DevtoolsOverlay()
-        ImeWindow()
-        BottomSheetWindow()
+        if (isBubbleMode) {
+            // Modo burbujas: sin teclas; la app recupera la pantalla y solo los globos son tocables.
+            SuggestionBubblesOverlay()
+        } else {
+            ImeWindow()
+            BottomSheetWindow()
+        }
         ImeSystemUi()
     }
 }
