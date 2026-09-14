@@ -22,10 +22,6 @@ import dev.patrickgold.florisboard.BuildConfig
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.editorInstance
 import dev.patrickgold.florisboard.keyboardManager
-import java.net.ConnectException
-import java.net.NoRouteToHostException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -93,7 +89,7 @@ class EducationalCorrectionManager(context: Context) {
             result.onSuccess { baseUrl ->
                 _connectionState.value = EducationalBackendConnectionState.Connected(baseUrl)
             }.onFailure { error ->
-                _connectionState.value = EducationalBackendConnectionState.Unavailable(error.toUiMessage())
+                _connectionState.value = EducationalBackendConnectionState.Unavailable(EducationalMessages.login(error))
             }
         }
     }
@@ -128,7 +124,7 @@ class EducationalCorrectionManager(context: Context) {
     fun login(username: String, password: String) {
         if (_isLoggingIn.value) return
         if (username.isBlank() || password.isBlank()) {
-            _state.value = EducationalCorrectionState.Message("Ingresa alias y PIN.")
+            _state.value = EducationalCorrectionState.Message(EducationalMessages.EmptyCredentials)
             return
         }
         _isLoggingIn.value = true
@@ -145,7 +141,7 @@ class EducationalCorrectionManager(context: Context) {
                 persistSession(session)
                 _state.value = EducationalCorrectionState.Message("Sesión iniciada.")
             }.onFailure { error ->
-                _state.value = EducationalCorrectionState.Message(error.toUiMessage())
+                _state.value = EducationalCorrectionState.Message(EducationalMessages.login(error))
             }
             _isLoggingIn.value = false
         }
@@ -161,12 +157,12 @@ class EducationalCorrectionManager(context: Context) {
 
         val session = _session.value
         if (session == null) {
-            _state.value = EducationalCorrectionState.Message("Inicia sesión para usar la corrección IA.")
+            _state.value = EducationalCorrectionState.Message(EducationalMessages.NoSession)
             return
         }
         if (session.isExpired()) {
             clearSession()
-            _state.value = EducationalCorrectionState.Message("La sesión venció. Inicia sesión nuevamente.")
+            _state.value = EducationalCorrectionState.Message(EducationalMessages.SessionExpired)
             return
         }
 
@@ -204,7 +200,7 @@ class EducationalCorrectionManager(context: Context) {
             val activeSession = _session.value
             if (activeSession == null || activeSession.isExpired()) {
                 clearSession()
-                _state.value = EducationalCorrectionState.Message("La sesión venció. Inicia sesión nuevamente.")
+                _state.value = EducationalCorrectionState.Message(EducationalMessages.SessionExpired)
                 return@launch
             }
             val result = EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
@@ -220,10 +216,10 @@ class EducationalCorrectionManager(context: Context) {
                 if (error is EducationalHttpException && error.status == 401) {
                     clearSession()
                 }
-                _state.value = if (error.isRetryable()) {
-                    EducationalCorrectionState.Error(error.toUiMessage(), retryText = extractedText)
+                _state.value = if (EducationalMessages.isRetryable(error)) {
+                    EducationalCorrectionState.Error(EducationalMessages.correction(error), retryText = extractedText)
                 } else {
-                    EducationalCorrectionState.Error(error.toUiMessage(), retryText = null)
+                    EducationalCorrectionState.Error(EducationalMessages.correction(error), retryText = null)
                 }
             }
         }
@@ -237,7 +233,7 @@ class EducationalCorrectionManager(context: Context) {
             replacement = suggestion.text,
         )
         if (!replaced) {
-            _state.value = EducationalCorrectionState.Message("El texto cambió. Solicita una nueva corrección.")
+            _state.value = EducationalCorrectionState.Message(EducationalMessages.TextChanged)
             return
         }
         sendFeedbackAndClose(
@@ -324,7 +320,7 @@ class EducationalCorrectionManager(context: Context) {
             replacement = buffer,
         )
         if (!replaced) {
-            _state.value = EducationalCorrectionState.Message("El texto cambió. Solicita una nueva corrección.")
+            _state.value = EducationalCorrectionState.Message(EducationalMessages.TextChanged)
             return
         }
         val edited = buffer != current.baseSuggestion
@@ -373,38 +369,6 @@ class EducationalCorrectionManager(context: Context) {
         }
     }
 
-    /**
-     * Errores ante los que vale la pena ofrecer reintento manual: la IA caida (502) o
-     * fallos de red transitorios. No se reintenta automaticamente (cada llamada crea una sesion).
-     */
-    private fun Throwable.isRetryable(): Boolean {
-        return when (this) {
-            is EducationalHttpException -> status == 502
-            is ConnectException,
-            is NoRouteToHostException,
-            is SocketTimeoutException,
-            is UnknownHostException -> true
-            else -> false
-        }
-    }
-
-    private fun Throwable.toUiMessage(): String {
-        return when (this) {
-            is EducationalHttpException -> when (status) {
-                400 -> "El backend rechazó el fragmento enviado."
-                401 -> "La sesión venció. Inicia sesión nuevamente."
-                403 -> "No tienes permiso para solicitar correcciones."
-                404 -> "La sesión de corrección ya no está disponible."
-                502 -> "La IA no está disponible temporalmente."
-                else -> "Error del backend: HTTP $status."
-            }
-            is ConnectException -> "No se pudo conectar con el backend desplegado. Revisa tu conexión a internet o si Cloud Run está activo."
-            is NoRouteToHostException -> "No hay ruta hacia el backend desplegado. Revisa la conexión a internet del dispositivo."
-            is SocketTimeoutException -> "El backend desplegado no respondió a tiempo. Vuelve a intentar en unos segundos."
-            is UnknownHostException -> "No se pudo resolver la dirección del backend desplegado."
-            else -> message ?: "No se pudo completar la corrección."
-        }
-    }
 }
 
 private const val PREWARM_DEBOUNCE_MS = 2 * 60 * 1000L // 2 minutos

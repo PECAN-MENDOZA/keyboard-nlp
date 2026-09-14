@@ -22,7 +22,6 @@ import dev.patrickgold.florisboard.ime.editor.FlorisEditorInfo
 import dev.patrickgold.florisboard.ime.keyboard.KeyboardState
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 
 class EducationalPrivacyPolicyTest : FunSpec({
     val session = EducationalSession(
@@ -46,7 +45,7 @@ class EducationalPrivacyPolicyTest : FunSpec({
             keyboardState = KeyboardState.new(),
             session = null,
         )
-        reason shouldContain "Inicia sesión"
+        reason shouldBe EducationalMessages.NoSession
     }
 
     test("allows a normal text field with an active session") {
@@ -65,7 +64,7 @@ class EducationalPrivacyPolicyTest : FunSpec({
             keyboardState = KeyboardState.new(),
             session = session,
         )
-        reason shouldContain "contraseña"
+        reason shouldBe EducationalMessages.NotAllowedHere
     }
 
     test("blocks fields that opt out of personalized learning") {
@@ -74,7 +73,7 @@ class EducationalPrivacyPolicyTest : FunSpec({
             keyboardState = KeyboardState.new(),
             session = session,
         )
-        reason shouldContain "privado"
+        reason shouldBe EducationalMessages.NotAllowedHere
     }
 
     test("blocks raw input editors") {
@@ -83,6 +82,6 @@ class EducationalPrivacyPolicyTest : FunSpec({
             keyboardState = KeyboardState.new(),
             session = session,
         )
-        reason shouldContain "no entrega texto"
+        reason shouldBe EducationalMessages.AppNotSupported
     }
 })

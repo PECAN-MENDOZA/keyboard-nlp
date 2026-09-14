@@ -29,7 +29,7 @@ import dev.patrickgold.florisboard.ime.editor.EditorContent
 object EditorTextExtractor {
     fun extract(content: EditorContent): EducationalExtractionResult {
         if (content.offset < 0 || content.localSelection.isNotValid) {
-            return EducationalExtractionResult.Blocked("El editor no entregó un rango confiable.")
+            return EducationalExtractionResult.Blocked(EducationalMessages.AppNotSupported)
         }
         if (!content.localSelection.isSelectionMode) {
             return EducationalExtractionResult.Blocked(SelectFirstMessage)
@@ -40,7 +40,7 @@ object EditorTextExtractor {
         }
         if (text.length > EDUCATIONAL_BACKEND_MAX_CHARS) {
             return EducationalExtractionResult.Blocked(
-                "El texto sombreado supera el máximo de $EDUCATIONAL_BACKEND_MAX_CHARS caracteres.",
+                EducationalMessages.tooLong(EDUCATIONAL_BACKEND_MAX_CHARS),
             )
         }
         return EducationalExtractionResult.Ready(
@@ -52,7 +52,6 @@ object EditorTextExtractor {
         )
     }
 
-    const val SelectFirstMessage =
-        "Sombrea con el dedo el texto que quieres corregir y vuelve a tocar IA."
+    const val SelectFirstMessage = EducationalMessages.SelectFirst
 }
 
