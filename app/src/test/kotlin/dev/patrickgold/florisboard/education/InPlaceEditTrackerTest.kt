@@ -42,6 +42,16 @@ class InPlaceEditTrackerTest : FunSpec({
             TrackedRange.Inside("parque", EditorRange(11, 17))
     }
 
+    test("typed text that repeats the suffix does not truncate the range") {
+        // Sin punto final para que el sufijo (" y volví") pueda repetirse dentro de lo escrito.
+        val src = "Hoy fui al parque i jugé y volví"
+        val a = InPlaceEditTracker.anchor(content(src, cursor = 24), EditorRange(11, 24))!!
+        a.suffix shouldBe " y volví"
+        val now = "Hoy fui al parque y volví y jugué y volví"
+        InPlaceEditTracker.resolve(a, content(now, cursor = 33)) shouldBe
+            TrackedRange.Inside("parque y volví y jugué", EditorRange(11, 33))
+    }
+
     test("cursor outside the range loses the edit") {
         val now = "Hoy fui al parque y jugué y volví."
         InPlaceEditTracker.resolve(anchor, content(now, cursor = 3)) shouldBe TrackedRange.Lost
