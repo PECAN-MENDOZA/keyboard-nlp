@@ -71,7 +71,8 @@ class EducationalCorrectionManager(context: Context) {
             persistSession(newSession)
             // Otra cuenta en el mismo teléfono: el borrador de la anterior no es de este alumno (el
             // marcador lo descarta el propio restore()). La ejecución anterior sigue en el backend.
-            if (draftStore.ownerUserId() != newSession.userId) draftStore.clear()
+            // Un borrador sin dueño (versión anterior) se adopta.
+            if (!experimentDraftBelongsTo(draftStore.ownerUserId(), newSession.userId)) draftStore.clear()
             // Con la misma cuenta, una ejecución pendiente (o una finalización que falló por
             // sesión vencida) sigue ahí.
             experiment.restore()
@@ -85,7 +86,9 @@ class EducationalCorrectionManager(context: Context) {
      * lleva `id_ejecucion`. Sobrevive a una sesión vencida (la finalización pendiente se reenvía
      * tras volver a entrar); solo [logout] o el login de otra cuenta lo borran. Un 401 del backend
      * cierra la sesión local (no el coordinador): el inicio muestra el login y, al entrar, se
-     * reanuda con el mismo payload.
+     * reanuda con el mismo payload. El cronómetro arranca desde la primera modificación del campo
+     * de la tarea (la pantalla llama a `markFirstKey()`), nunca desde el teclado en otra pantalla
+     * u otra app.
      */
     val experiment = EducationalExperimentCoordinator(
         scope = scope,
@@ -96,6 +99,25 @@ class EducationalCorrectionManager(context: Context) {
         store = PrefsExperimentMarkerStore(appContext),
         bootId = { PrefsExperimentMarkerStore.bootId(appContext) },
         onSessionRejected = { clearSession() },
+    )
+
+    // "Finalizar y guardar": cierra la tira, congela la frontera, drena el feedback y envía.
+    private val finisher = ExperimentFinisher(
+        scope = scope,
+        strip = object : ExperimentFinisher.CorrectionStrip {
+            override fun openCorrection() = when (_state.value) {
+                is EducationalCorrectionState.Processing -> ExperimentFinisher.OpenCorrection.PROCESSING
+                is EducationalCorrectionState.ShowingSuggestions -> ExperimentFinisher.OpenCorrection.SUGGESTIONS
+                is EducationalCorrectionState.Applied -> ExperimentFinisher.OpenCorrection.APPLIED
+                is EducationalCorrectionState.EditingInPlace -> ExperimentFinisher.OpenCorrection.EDITING
+                else -> ExperimentFinisher.OpenCorrection.NONE
+            }
+            override fun ignoreSuggestion() = this@EducationalCorrectionManager.ignoreSuggestion()
+            override fun finishEdit() = this@EducationalCorrectionManager.finishEdit()
+            override fun dismiss() = this@EducationalCorrectionManager.dismiss()
+        },
+        feedbackQueue = feedbackQueue,
+        experiment = experiment,
     )
 
     init {
@@ -195,29 +217,12 @@ class EducationalCorrectionManager(context: Context) {
     }
 
     /**
-     * El alumno pulsó una tecla que escribe (carácter, espacio, borrar…). Solo importa como primera
-     * pulsación de una ejecución activa: arranca el cronómetro; el resto de pulsaciones se ignoran.
+     * "Finalizar y guardar": cierra la sugerencia que siga abierta (rechazo) o la edición en curso
+     * (su feedback se encola), congela texto y duración en el coordinador en ese mismo instante,
+     * espera a que TODO el feedback pendiente llegue al backend y solo entonces envía la
+     * finalización congelada. Con una corrección procesándose no finaliza. Ver [ExperimentFinisher].
      */
-    fun onUserKeyPress() {
-        if (experiment.state.value is EducationalExperimentState.Active) experiment.markFirstKey()
-    }
-
-    /**
-     * "Finalizar y guardar": cierra la sugerencia que siga abierta (su feedback se encola), espera
-     * a que TODO el feedback pendiente llegue al backend y solo entonces envía la finalización.
-     * El backend cierra el feedback al completar, así que el orden feedback → complete es lo
-     * que fija la aceptación registrada. Devuelve lo que devuelve [EducationalExperimentCoordinator.complete].
-     */
-    suspend fun completeExperiment(text: String): Boolean {
-        when (_state.value) {
-            is EducationalCorrectionState.EditingInPlace -> finishEdit()
-            is EducationalCorrectionState.ShowingSuggestions,
-            is EducationalCorrectionState.Applied -> dismiss()
-            else -> Unit
-        }
-        feedbackQueue.drain()
-        return experiment.complete(text)
-    }
+    suspend fun completeExperiment(text: String): Boolean = finisher.finish(text)
 
     // ---- Solicitud ------------------------------------------------------------------------
 

@@ -116,9 +116,11 @@ class EducationalMessagesTest : FunSpec({
                 EducationalMessages.ExperimentCompletionConflict
             EducationalMessages.ExperimentCompletionConflict shouldBe "No pudimos guardar tu texto. Toca Reintentar."
         }
-        test("the pending completion notice asks to retry") {
+        test("the pending completion and pending cancel notices ask to retry") {
             EducationalMessages.ExperimentCompletionPending shouldBe
                 "No pudimos confirmar que tu texto se guardó. Toca Reintentar."
+            EducationalMessages.ExperimentCancelPending shouldBe
+                "No pudimos confirmar la cancelación. Toca Reintentar."
         }
         test("any network failure asks to check the connection") {
             ExperimentOp.entries.forEach { op ->
@@ -190,6 +192,7 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.ExperimentRestoring, EducationalMessages.ExperimentCancelling,
             EducationalMessages.ExperimentNotActive, EducationalMessages.ExperimentCompletionPending,
             EducationalMessages.ExperimentCompletionConflict, EducationalMessages.LogoutDuringExperiment,
+            EducationalMessages.ExperimentCancelPending,
             EducationalMessages.textCounter(12, 10_000), EducationalMessages.elapsedDescription("1:05"),
         ) + ExperimentCondition.entries.map { EducationalMessages.conditionLabel(it) } +
             CancelReason.entries.map { EducationalMessages.cancelReasonLabel(it) } +

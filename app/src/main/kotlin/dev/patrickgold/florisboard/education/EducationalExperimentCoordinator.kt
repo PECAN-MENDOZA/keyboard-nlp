@@ -69,19 +69,30 @@ class RepositoryExperimentApi(
         baseUrls.firstSuccessful { repository.cancelExperiment(it, token, runId, reason) }
 }
 
-/** Finalización que falló y se conserva para "Reintentar" con la MISMA clave (idempotente en el backend). */
-data class PendingCompletion(val text: String, val durationMs: Long, val completionKey: String)
+/**
+ * Payload de finalización congelado al tocar "Finalizar": texto, duración, clave idempotente y la
+ * versión de la app en ese momento. Se reenvía TAL CUAL hasta recibir 200 o un cierre terminal
+ * (también tras una actualización de la app: [appVersion] es la del intento original).
+ */
+data class PendingCompletion(val text: String, val durationMs: Long, val completionKey: String, val appVersion: String)
 
-/** [PendingCompletion] tal como se persiste dentro del marcador. */
+/** [PendingCompletion] tal como se persiste dentro del marcador; sin `appVersion` en los marcadores previos. */
 @Serializable
-data class PendingCompletionMarker(val text: String, val durationMs: Long, val completionKey: String)
+data class PendingCompletionMarker(
+    val text: String,
+    val durationMs: Long,
+    val completionKey: String,
+    val appVersion: String = "",
+)
 
 /**
  * Lo mínimo que sobrevive a la muerte del proceso: qué ejecución había, en qué condición, de qué
- * alumno ([ownerUserId] = `EducationalSession.userId`), cuándo empezó a escribir (`elapsedRealtime`,
- * válido solo dentro del mismo [bootId]) y, si una finalización quedó sin confirmar, su payload
- * exacto ([pendingCompletion], con `status = "COMPLETING"`) para reenviarlo con la misma clave.
- * Los marcadores anteriores a estos campos se leen con sus valores por defecto.
+ * alumno ([ownerUserId] = `EducationalSession.userId`; vacío en los marcadores de versiones
+ * anteriores, que se adoptan al restaurar), cuándo empezó a escribir (`elapsedRealtime`, válido
+ * solo dentro del mismo [bootId]), si una finalización quedó sin confirmar, su payload exacto
+ * ([pendingCompletion], con `status = "COMPLETING"`) para reenviarlo con la misma clave, y si el
+ * alumno pidió cancelar sin que el backend lo confirmara, el motivo ([pendingCancel]) para
+ * reenviarlo antes que nada. Los marcadores anteriores a estos campos se leen con sus valores por defecto.
  */
 @Serializable
 data class ExperimentMarker(
@@ -92,6 +103,7 @@ data class ExperimentMarker(
     val bootId: String,
     val ownerUserId: String = "",
     val pendingCompletion: PendingCompletionMarker? = null,
+    val pendingCancel: CancelReason? = null,
 )
 
 /** Persistencia del marcador; la implementación Android vive en [PrefsExperimentMarkerStore]. */
@@ -118,16 +130,21 @@ sealed interface EducationalExperimentState {
     data class Ready(val run: ExperimentRunResponse) : EducationalExperimentState
     data class Starting(val run: ExperimentRunResponse) : EducationalExperimentState
     /**
-     * El alumno escribe; [firstKeyAtMs] es `elapsedRealtime` de la primera pulsación (null hasta
-     * entonces). [timerLost]: la ejecución se restauró sin un cronómetro fiable (una primera
-     * pulsación de otro arranque del teléfono, un marcador de otra ejecución o ninguno); no se
-     * puede finalizar, solo cancelar.
+     * El alumno escribe; [firstKeyAtMs] es `elapsedRealtime` de la primera modificación del campo
+     * de la tarea (null hasta entonces). [timerLost]: la ejecución se restauró sin un cronómetro
+     * fiable (una primera pulsación de otro arranque del teléfono, un marcador de otra ejecución o
+     * ninguno); no se puede finalizar, solo cancelar.
      */
     data class Active(
         val run: ExperimentRunResponse,
         val firstKeyAtMs: Long?,
         val timerLost: Boolean = false,
     ) : EducationalExperimentState
+    /**
+     * Frontera de finalización cerrada: texto y duración congelados al tocar "Finalizar" (y ya en
+     * disco). Se publica antes de esperar el feedback pendiente y antes de enviar el `PATCH`; el
+     * envío en sí puede seguir en vuelo o aún no haber salido, pero nada más se acepta.
+     */
     data class Completing(
         val run: ExperimentRunResponse,
         val text: String,
@@ -174,13 +191,19 @@ sealed interface EducationalExperimentState {
  * ([EducationalExperimentState.Active.timerLost]) y solo cabe cancelar. Si `restore()` falla y hay
  * marcador, la ejecución se reconstruye desde él para que el bloqueo UNASSISTED no se abra por un
  * fallo de red. Un marcador de otra cuenta (`ownerUserId` distinto del alumno con sesión) se
- * descarta antes de tocar el backend: la ejecución anterior sigue tal cual en el backend.
+ * descarta antes de tocar el backend: la ejecución anterior sigue tal cual en el backend. Un
+ * marcador sin dueño (versión anterior del teclado) se conserva como propio mientras se consulta y
+ * queda a nombre del alumno actual si el backend confirma la misma ejecución.
  *
- * Frontera de finalización: mientras una finalización está en vuelo o falló sin confirmación
- * (`Completing`, `Failed` con `pendingCompletion` y run ACTIVE) no se expone id ni se permite
- * corregir, en ninguna condición: el backend puede haberla guardado ya. El payload pendiente se
- * persiste ANTES de enviarlo, así tras una muerte del proceso se reenvían exactamente los mismos
- * bytes (mismo `completion_key`) sin volver a preguntar por la ejecución.
+ * Frontera de finalización: se cierra en [beginCompletion], al tocar "Finalizar" (texto y
+ * duración congelados y persistidos, estado `Completing`), y sigue cerrada mientras la
+ * finalización está en vuelo o falló sin confirmación (`Failed` con `pendingCompletion` y run
+ * ACTIVE): no se expone id ni se permite corregir, en ninguna condición, porque el backend puede
+ * haberla guardado ya. [submitCompletion] envía después exactamente el payload congelado; tras
+ * una muerte del proceso se reenvían los mismos bytes (mismo `completion_key`) sin volver a
+ * preguntar por la ejecución. Lo mismo vale para una cancelación en vuelo o sin confirmar
+ * (`Cancelling`, `Failed` con `pendingCancel`): el alumno ya decidió abandonar y el motivo se
+ * persiste para reenviarlo antes que cualquier otra cosa.
  *
  * Un 401 en cualquier llamada se comunica por [onSessionRejected] (el manager cierra la sesión
  * local sin tocar este estado, y al volver a entrar se reanuda con el mismo payload).
@@ -225,15 +248,21 @@ class EducationalExperimentCoordinator(
     /** Último alumno conocido: permite guardar el marcador aunque la sesión ya haya vencido. */
     private var lastOwnerUserId: String = ""
 
+    /** Payload congelado por [beginCompletion] que [submitCompletion] todavía no envió. */
+    private var prepared: PendingCompletion? = null
+
     // --- Gates ---------------------------------------------------------------------------------
 
-    /** Finalización enviada sin confirmación: el backend puede haberla guardado ya. */
+    /**
+     * Desenlace en duda: una finalización congelada, en vuelo o sin confirmar (el backend puede
+     * haberla guardado ya) o una cancelación en vuelo o sin confirmar (el alumno ya abandonó).
+     * En cualquier condición se cierra el gate y se oculta el id.
+     */
     private fun atCompletionBoundary(current: EducationalExperimentState): Boolean = when (current) {
         is EducationalExperimentState.Completing -> true
+        is EducationalExperimentState.Cancelling -> true
         is EducationalExperimentState.Failed ->
-            current.pendingCompletion != null && current.run?.status == StatusActive
-        is EducationalExperimentState.Cancelling ->
-            current.pendingCompletion != null && current.run.status == StatusActive
+            current.pendingCancel != null || (current.pendingCompletion != null && current.run?.status == StatusActive)
         else -> false
     }
 
@@ -245,12 +274,11 @@ class EducationalExperimentCoordinator(
             is EducationalExperimentState.Active -> current.run
             is EducationalExperimentState.Failed -> current.run
             is EducationalExperimentState.Restoring -> current.known
-            is EducationalExperimentState.Cancelling -> current.run
             else -> null
         }?.takeIf { it.status == StatusActive }
     }
 
-    /** `false` mientras hay una ejecución ACTIVE sin asistencia o una finalización sin confirmar. */
+    /** `false` mientras hay una ejecución ACTIVE sin asistencia o una finalización/cancelación sin confirmar. */
     fun correctionAllowed(): Boolean {
         if (atCompletionBoundary(_state.value)) return false
         return activeRun()?.condition != ExperimentCondition.UNASSISTED
@@ -330,47 +358,47 @@ class EducationalExperimentCoordinator(
     }
 
     /**
-     * Recupera la ejecución vigente al abrir la app. Primero, síncronamente: un marcador de otra
-     * cuenta se descarta; una finalización pendiente persistida vuelve como [Failed] reintentable
-     * sin tocar la red (la frontera sigue cerrada); si no, se publica [Restoring] con la ejecución
-     * del marcador y se consulta el backend: ACTIVE → [Active] (con `firstKeyAtMs` del marcador si
-     * es del mismo arranque; sin primera pulsación en la misma ejecución no hay nada perdido; con
-     * una de otro arranque, otra ejecución o sin marcador → `timerLost`), PENDING → [Ready], nada
-     * → [Idle] y se borra el marcador. Si falla y hay marcador, la ejecución se reconstruye desde
-     * él en [Failed] (reintentable) para conservar el bloqueo; sin marcador → [Idle]. Nunca pisa
-     * una ejecución en curso ni una operación pendiente de confirmación.
+     * Recupera la ejecución vigente al abrir la app. Primero, síncronamente: sin sesión no se
+     * consulta nada (y una ejecución en curso o una operación pendiente nunca se degrada a
+     * [Idle]); un marcador de otra cuenta se descarta; uno sin dueño (versión anterior) se trata
+     * como propio; una cancelación pendiente persistida vuelve como [Failed] reintentable sin
+     * tocar la red, con prioridad sobre una finalización pendiente, que también vuelve así (la
+     * frontera sigue cerrada); si no, se publica [Restoring] con la ejecución del marcador y se
+     * consulta el backend: ACTIVE → [Active] (con `firstKeyAtMs` del marcador si es del mismo
+     * arranque; sin primera pulsación en la misma ejecución no hay nada perdido; con una de otro
+     * arranque, otra ejecución o sin marcador → `timerLost`), PENDING → [Ready], nada → [Idle] y
+     * se borra el marcador. Al guardar, el marcador queda a nombre del alumno actual (migración
+     * del marcador legado). Si falla y hay marcador, la ejecución se reconstruye desde él en
+     * [Failed] (reintentable) para conservar el bloqueo; sin marcador → [Idle]; un 401 se comunica
+     * en ambos casos por [onSessionRejected]. Nunca pisa una ejecución en curso ni una operación
+     * pendiente de confirmación.
      */
     fun restore(): Unit = synchronized(lock) {
         if (busy) return
+        val retained = when (val state = _state.value) {
+            is EducationalExperimentState.Active,
+            is EducationalExperimentState.Completing,
+            is EducationalExperimentState.Cancelling -> true
+            is EducationalExperimentState.Failed -> state.pendingCompletion != null || state.pendingCancel != null
+            else -> false
+        }
         val current = session()
         if (current == null) {
-            _state.value = EducationalExperimentState.Idle
+            if (!retained) _state.value = EducationalExperimentState.Idle
             return
         }
         lastOwnerUserId = current.userId
         val stored = store.load()
-        val marker = stored?.takeIf { it.ownerUserId == current.userId }
+        val marker = stored?.takeIf { it.ownerUserId == current.userId || it.ownerUserId.isEmpty() }
         if (stored != null && marker == null) {
             // Otra cuenta en el mismo teléfono: nada de lo retenido es de este alumno.
             store.clear()
             _state.value = EducationalExperimentState.Idle
+        } else if (retained) {
+            return
         }
-        when (val state = _state.value) {
-            is EducationalExperimentState.Active,
-            is EducationalExperimentState.Completing,
-            is EducationalExperimentState.Cancelling -> return
-            is EducationalExperimentState.Failed ->
-                if (state.pendingCompletion != null || state.pendingCancel != null) return
-            else -> Unit
-        }
-        val pending = marker?.pendingCompletion
-        if (marker != null && pending != null) {
-            _state.value = EducationalExperimentState.Failed(
-                run = marker.toRun().copy(status = StatusActive),
-                message = EducationalMessages.ExperimentCompletionPending,
-                retryable = true,
-                pendingCompletion = PendingCompletion(pending.text, pending.durationMs, pending.completionKey),
-            )
+        if (marker != null && (marker.pendingCancel != null || marker.pendingCompletion != null)) {
+            _state.value = pendingFromMarker(marker)
             return
         }
         val known = marker?.toRun()
@@ -395,18 +423,45 @@ class EducationalExperimentCoordinator(
                     }
                 }
                 .onFailure { error ->
-                    transition(
-                        if (marker == null) {
-                            EducationalExperimentState.Idle
-                        } else {
-                            failed(marker.toRun(), error, ExperimentOp.RESTORE).copy(retryable = true)
-                        },
-                    )
+                    if (marker == null) {
+                        if (error is EducationalHttpException && error.status == 401) onSessionRejected()
+                        transition(EducationalExperimentState.Idle)
+                    } else {
+                        transition(failed(marker.toRun(), error, ExperimentOp.RESTORE).copy(retryable = true))
+                    }
                 }
         }
     }
 
-    /** Primera pulsación del alumno; idempotente. La duración se mide desde aquí. */
+    /**
+     * Operación sin confirmar reconstruida desde el marcador, sin red: la cancelación tiene
+     * prioridad (fue la última decisión del alumno) y "Reintentar" la reenvía; si no, la
+     * finalización, que se reenvía tal cual.
+     */
+    private fun pendingFromMarker(marker: ExperimentMarker): EducationalExperimentState.Failed {
+        val pendingCompletion = marker.pendingCompletion?.let {
+            PendingCompletion(it.text, it.durationMs, it.completionKey, it.appVersion.ifEmpty { appVersion })
+        }
+        val run = marker.toRun().let { if (it.status == StatusCompleting) it.copy(status = StatusActive) else it }
+        return if (marker.pendingCancel != null) {
+            EducationalExperimentState.Failed(
+                run = run,
+                message = EducationalMessages.ExperimentCancelPending,
+                retryable = true,
+                pendingCompletion = pendingCompletion,
+                pendingCancel = marker.pendingCancel,
+            )
+        } else {
+            EducationalExperimentState.Failed(
+                run = run.copy(status = StatusActive),
+                message = EducationalMessages.ExperimentCompletionPending,
+                retryable = true,
+                pendingCompletion = pendingCompletion,
+            )
+        }
+    }
+
+    /** Primera modificación del campo de la tarea; idempotente. La duración se mide desde aquí. */
     fun markFirstKey(): Unit = synchronized(lock) {
         val current = _state.value as? EducationalExperimentState.Active ?: return
         if (current.firstKeyAtMs != null || current.timerLost) return
@@ -416,43 +471,79 @@ class EducationalExperimentCoordinator(
     }
 
     /**
-     * Envía el texto final. Devuelve `false` si no se envió nada: texto en blanco, sin primera
-     * pulsación o duración no positiva (no escribió / reloj inválido), cronómetro perdido, o sin
-     * ejecución activa. Tras un fallo reenvía la finalización pendiente TAL CUAL (mismo texto,
-     * duración y clave): el texto nuevo se ignora para que el backend deduplique un único payload.
-     * El payload se persiste en el marcador antes de lanzar la petición.
+     * Toque en "Finalizar": cierra la frontera AHORA, sin red. Congela el texto y la duración
+     * (`elapsedRealtime` de este instante menos la primera modificación), genera la clave
+     * idempotente, persiste el payload en el marcador (`status = "COMPLETING"`) y publica
+     * [EducationalExperimentState.Completing]; desde aquí no hay edición, IA, cancelación ni un
+     * segundo Finalizar. Devuelve `false`, sin tocar el estado, si no hay nada que enviar: texto en
+     * blanco, sin primera modificación o duración no positiva (no escribió / reloj inválido),
+     * cronómetro perdido, sin ejecución activa u otra operación en vuelo. Lo que quede pendiente
+     * (feedback de la tira) se drena después y solo entonces [submitCompletion] envía el payload.
+     */
+    fun beginCompletion(rawText: String): Boolean = synchronized(lock) {
+        if (busy) return false
+        val current = _state.value as? EducationalExperimentState.Active ?: return false
+        if (current.timerLost) return false
+        val text = rawText.trim()
+        if (text.isEmpty()) return false
+        val firstKey = current.firstKeyAtMs ?: return false
+        val duration = elapsedRealtime() - firstKey
+        if (duration <= 0L) return false
+        val pending = PendingCompletion(text, duration, newCompletionKey(), appVersion)
+        saveCompletingMarker(current.run, pending)
+        prepared = pending
+        _state.value = EducationalExperimentState.Completing(current.run, text, duration, pending.completionKey)
+        return true
+    }
+
+    /**
+     * Envía el payload congelado por [beginCompletion] exactamente como quedó. Idempotente: no hace
+     * nada (`false`) si no hay una finalización preparada, si ya se envió o si otra operación está
+     * en vuelo. Sin sesión el payload queda en [Failed] reintentable, nunca se pierde.
+     */
+    fun submitCompletion(): Boolean = synchronized(lock) {
+        if (busy) return false
+        val current = _state.value as? EducationalExperimentState.Completing ?: return false
+        val pending = prepared ?: return false
+        prepared = null
+        launchCompletion(current.run, pending)
+        return true
+    }
+
+    /**
+     * [beginCompletion] y [submitCompletion] seguidos, para quien no tiene nada que drenar entre
+     * medias. Tras un fallo reenvía la finalización pendiente TAL CUAL (mismo texto, duración,
+     * clave y versión): el texto nuevo se ignora para que el backend deduplique un único payload.
      */
     fun complete(rawText: String): Boolean = synchronized(lock) {
         if (busy) return false
-        val (run, pending) = when (val current = _state.value) {
-            is EducationalExperimentState.Active -> {
-                if (current.timerLost) return false
-                val text = rawText.trim()
-                if (text.isEmpty()) return false
-                val firstKey = current.firstKeyAtMs ?: return false
-                val duration = elapsedRealtime() - firstKey
-                if (duration <= 0L) return false
-                current.run to PendingCompletion(text, duration, newCompletionKey())
-            }
+        when (val current = _state.value) {
+            is EducationalExperimentState.Active -> return beginCompletion(rawText) && submitCompletion()
             is EducationalExperimentState.Failed -> {
-                if (!current.retryable) return false
+                // Una cancelación sin confirmar va primero (retry()); no se reabre la finalización.
+                if (!current.retryable || current.pendingCancel != null) return false
                 val run = current.run ?: return false
                 val previous = current.pendingCompletion ?: return false
-                run to previous
+                saveCompletingMarker(run, previous)
+                launchCompletion(run, previous)
+                return true
             }
             else -> return false
         }
-        saveCompletingMarker(run, pending)
+    }
+
+    /** `PATCH …/complete` con el payload tal cual; el marcador ya lo tiene. */
+    private fun launchCompletion(run: ExperimentRunResponse, pending: PendingCompletion) {
         val token = session()?.token
         if (token == null) {
             _state.value = EducationalExperimentState.Failed(
                 run, EducationalMessages.SessionExpired, retryable = true, pendingCompletion = pending,
             )
-            return true
+            return
         }
         _state.value = EducationalExperimentState.Completing(run, pending.text, pending.durationMs, pending.completionKey)
         job = scope.launch {
-            api.complete(token, run.id, pending.text, pending.durationMs, pending.completionKey, appVersion)
+            api.complete(token, run.id, pending.text, pending.durationMs, pending.completionKey, pending.appVersion)
                 .onSuccess { completed -> transition(EducationalExperimentState.Completed(completed)) { store.clear() } }
                 .onFailure { error ->
                     val next = completionFailed(run, error, pending)
@@ -465,7 +556,6 @@ class EducationalExperimentCoordinator(
                     }
                 }
         }
-        return true
     }
 
     /**
@@ -485,10 +575,11 @@ class EducationalExperimentCoordinator(
     }
 
     /**
-     * Abandona la ejecución. Solo pasa a [Cancelled] (y borra el marcador) cuando el backend lo
-     * confirma (204) o responde que la ejecución ya estaba cerrada (400/404). Sin red, con 401 o
-     * 5xx —o sin sesión— la ejecución, el marcador y el bloqueo se conservan en [Failed] con el
-     * motivo pendiente para "Reintentar".
+     * Abandona la ejecución. El motivo se persiste en el marcador ANTES de la petición (una
+     * muerte del proceso lo reenvía al restaurar). Solo pasa a [Cancelled] (y borra el marcador)
+     * cuando el backend lo confirma (204) o responde que la ejecución ya estaba cerrada (400/404).
+     * Sin red, con 401 o 5xx —o sin sesión— la ejecución, el marcador y el bloqueo se conservan en
+     * [Failed] con el motivo pendiente para "Reintentar".
      */
     fun cancel(reason: CancelReason): Unit = synchronized(lock) {
         if (busy) return
@@ -498,6 +589,7 @@ class EducationalExperimentCoordinator(
             is EducationalExperimentState.Failed -> (current.run ?: return) to current.pendingCompletion
             else -> return
         }
+        saveCancellingMarker(run, pendingCompletion, reason)
         val token = session()?.token
         if (token == null) {
             _state.value = EducationalExperimentState.Failed(
@@ -524,6 +616,7 @@ class EducationalExperimentCoordinator(
     fun clear(): Unit = synchronized(lock) {
         job?.cancel()
         job = null
+        prepared = null
         _state.value = EducationalExperimentState.Idle
         store.clear()
     }
@@ -562,10 +655,32 @@ class EducationalExperimentCoordinator(
                 firstKeyAtMs = null,
                 bootId = bootId(),
                 ownerUserId = ownerUserId(),
-                pendingCompletion = PendingCompletionMarker(pending.text, pending.durationMs, pending.completionKey),
+                pendingCompletion = pending.toMarker(),
             ),
         )
     }
+
+    /**
+     * Motivo de cancelación en disco ANTES de enviarlo, junto a lo que ya había (primera
+     * modificación y arranque del marcador vigente, finalización pendiente si la hay).
+     */
+    private fun saveCancellingMarker(run: ExperimentRunResponse, pendingCompletion: PendingCompletion?, reason: CancelReason) {
+        val stored = store.load()?.takeIf { it.runId == run.id }
+        store.save(
+            ExperimentMarker(
+                runId = run.id,
+                condition = run.condition,
+                status = if (pendingCompletion != null) StatusCompleting else run.status,
+                firstKeyAtMs = stored?.firstKeyAtMs,
+                bootId = stored?.bootId ?: bootId(),
+                ownerUserId = ownerUserId(),
+                pendingCompletion = pendingCompletion?.toMarker(),
+                pendingCancel = reason,
+            ),
+        )
+    }
+
+    private fun PendingCompletion.toMarker() = PendingCompletionMarker(text, durationMs, completionKey, appVersion)
 
     /** Reconstrucción mínima cuando el backend no responde: basta para los gates y para cancelar. */
     private fun ExperimentMarker.toRun() = ExperimentRunResponse(

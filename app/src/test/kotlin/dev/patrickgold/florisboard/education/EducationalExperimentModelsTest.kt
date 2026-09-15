@@ -61,7 +61,8 @@ class EducationalExperimentModelsTest : FunSpec({
         val marker = ExperimentMarker(
             runId = "run-1", condition = ExperimentCondition.ASSISTED, status = "COMPLETING", firstKeyAtMs = null,
             bootId = "7", ownerUserId = "student_001",
-            pendingCompletion = PendingCompletionMarker("Texto final", 60_000, "key-1"),
+            pendingCompletion = PendingCompletionMarker("Texto final", 60_000, "key-1", "1.2.3"),
+            pendingCancel = CancelReason.INTERRUPTED,
         )
         json.decodeFromString<ExperimentMarker>(json.encodeToString(marker)) shouldBe marker
     }

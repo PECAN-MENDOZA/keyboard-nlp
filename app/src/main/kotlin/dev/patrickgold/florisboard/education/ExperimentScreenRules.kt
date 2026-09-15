@@ -16,14 +16,11 @@
 
 package dev.patrickgold.florisboard.education
 
-import dev.patrickgold.florisboard.ime.text.key.KeyCode
-import dev.patrickgold.florisboard.ime.text.key.KeyType
-
 /*
  * Reglas puras de la pantalla "Participar en una prueba" (sin Android): qué acepta el campo del
  * código, cuándo se habilita "Finalizar y guardar", cómo se muestra el cronómetro, qué acciones
  * ofrece cada estado [EducationalExperimentState.Failed], cuándo "Cerrar sesión" pide confirmar y
- * qué tecla cuenta como primera pulsación. La pantalla Compose solo las compone.
+ * de quién es el borrador en disco. La pantalla Compose solo las compone.
  */
 
 /** Longitud fija del código de acceso que entrega el investigador. */
@@ -36,9 +33,13 @@ const val ExperimentMaxTextLength = 10_000
 private val ExperimentCodePattern = Regex("[A-HJ-NP-Z2-9]{8}")
 
 private const val ExperimentRunStatusPending = "PENDING"
+private const val ExperimentRunStatusActive = "ACTIVE"
 
 /** Estado local (no del contrato) con el que el coordinador marca una ejecución cerrada por el backend. */
 private const val ExperimentRunStatusClosed = "CLOSED"
+
+/** Estado local del marcador mientras una finalización espera confirmación (hay texto en juego). */
+private const val ExperimentRunStatusCompleting = "COMPLETING"
 
 /** Lo que el campo acepta mientras se escribe: mayúsculas, solo letras y dígitos ASCII, máximo 8. */
 fun filterExperimentCodeInput(raw: String): String =
@@ -100,24 +101,27 @@ fun experimentDraftShouldClear(state: EducationalExperimentState): Boolean = whe
 
 /**
  * "Cerrar sesión" pide confirmación cuando hay texto o una operación que se perdería: ejecución
- * activa, finalización o cancelación en vuelo, o una fallida pendiente de reintentar.
+ * activa (también mientras se restaura desde un marcador ACTIVE/COMPLETING o si esa restauración
+ * falló), finalización o cancelación en vuelo, o una fallida pendiente de reintentar.
  */
 fun logoutNeedsConfirmation(state: EducationalExperimentState): Boolean = when (state) {
     is EducationalExperimentState.Active,
     is EducationalExperimentState.Completing,
     is EducationalExperimentState.Cancelling -> true
-    is EducationalExperimentState.Failed -> state.pendingCompletion != null || state.pendingCancel != null
+    is EducationalExperimentState.Restoring -> state.known?.status.let {
+        it == ExperimentRunStatusActive || it == ExperimentRunStatusCompleting
+    }
+    is EducationalExperimentState.Failed ->
+        state.pendingCompletion != null || state.pendingCancel != null || state.run?.status == ExperimentRunStatusActive
     else -> false
 }
 
 /**
- * Tecla que escribe en el campo (carácter, número, espacio, Enter, borrar): cuenta como primera
- * pulsación de una escritura controlada. Las teclas de sistema (cambiar vista, ajustes…) no.
+ * El borrador en disco es del alumno con sesión si lleva su `userId`; un borrador sin dueño
+ * (versión anterior del teclado) se adopta, nunca se descarta. Solo otro dueño lo excluye.
  */
-fun experimentTypingKey(code: Int, type: KeyType): Boolean = when (code) {
-    KeyCode.DELETE, KeyCode.DELETE_WORD, KeyCode.FORWARD_DELETE, KeyCode.FORWARD_DELETE_WORD, KeyCode.ENTER -> true
-    else -> code >= KeyCode.Spec.CHARACTERS_MIN && (type == KeyType.CHARACTER || type == KeyType.NUMERIC)
-}
+fun experimentDraftBelongsTo(storedOwner: String?, ownerUserId: String): Boolean =
+    storedOwner.isNullOrEmpty() || storedOwner == ownerUserId
 
 /**
  * Qué muestra la pantalla en [EducationalExperimentState.Failed]:

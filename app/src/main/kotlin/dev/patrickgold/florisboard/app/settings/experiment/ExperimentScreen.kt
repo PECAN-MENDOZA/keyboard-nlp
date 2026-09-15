@@ -211,7 +211,9 @@ fun ExperimentScreen() = FlorisScreen {
                     blockedReason = blockedReason,
                     completionRejected = completionRejected,
                     correcting = correctionState is EducationalCorrectionState.Processing,
-                    // El manager cierra la sugerencia abierta y espera su feedback antes de finalizar.
+                    // El manager cierra la sugerencia abierta, congela texto y duración en este
+                    // instante (la pantalla pasa a Completing: nada editable), espera el feedback
+                    // pendiente y solo entonces envía. El envío sigue aunque esta pantalla se vaya.
                     onFinish = {
                         val finalText = text
                         screenScope.launch {

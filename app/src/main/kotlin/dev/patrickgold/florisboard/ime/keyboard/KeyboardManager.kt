@@ -29,8 +29,6 @@ import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.appContext
 import dev.patrickgold.florisboard.clipboardManager
 import dev.patrickgold.florisboard.editorInstance
-import dev.patrickgold.florisboard.education.experimentTypingKey
-import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.extensionManager
 import dev.patrickgold.florisboard.ime.ImeUiMode
 import dev.patrickgold.florisboard.ime.core.DisplayLanguageNamesIn
@@ -89,7 +87,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     private val appContext by context.appContext()
     private val clipboardManager by context.clipboardManager()
     private val editorInstance by context.editorInstance()
-    private val educationalCorrectionManager by context.educationalCorrectionManager()
     private val extensionManager by context.extensionManager()
     private val nlpManager by context.nlpManager()
     private val subtypeManager by context.subtypeManager()
@@ -690,11 +687,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
 
     override fun onInputKeyUp(data: KeyData) = activeState.batchEdit {
         val windowController = FlorisImeService.windowControllerOrNull() ?: return@batchEdit
-        // Primera pulsación de la escritura controlada: solo en el campo de la tarea (la app del
-        // propio teclado); escribir en otra app no arranca el cronómetro.
-        if (experimentTypingKey(data.code, data.type) && editorInstance.activeInfo.packageName == appContext.packageName) {
-            educationalCorrectionManager.onUserKeyPress()
-        }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,

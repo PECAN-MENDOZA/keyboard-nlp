@@ -90,6 +90,7 @@ object EducationalMessages {
     const val ExperimentNotActive = "Esta prueba ya no está activa. Avisa al investigador."
     const val ExperimentCompletionPending = "No pudimos confirmar que tu texto se guardó. Toca Reintentar."
     const val ExperimentCompletionConflict = "No pudimos guardar tu texto. Toca Reintentar."
+    const val ExperimentCancelPending = "No pudimos confirmar la cancelación. Toca Reintentar."
     const val LogoutDuringExperiment =
         "Tienes una prueba en curso. Si cierras sesión se perderá el texto que no se haya guardado."
 

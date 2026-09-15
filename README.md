@@ -85,8 +85,9 @@ orden asistida/sin-asistencia lo fija la secuencia del participante (impar → `
    similar; debe comportarse exactamente igual que sin modo experimental.
 2. **Asistida** (`ASSISTED`): canjear el código en "Participar en una prueba" → Comenzar →
    escribir → usar la IA (crea `correction_session` con `experiment_run_id`) → "Finalizar y
-   guardar". El botón cierra la sugerencia que siga abierta y espera a que todo el feedback
-   (aceptar, rechazar, editar, deshacer) llegue al backend antes de enviar la finalización; está
+   guardar". El botón cierra la sugerencia que siga abierta (cuenta como rechazo), congela el
+   texto y la duración en ese instante y espera a que todo el feedback (aceptar, rechazar,
+   editar, deshacer) llegue al backend antes de enviar la finalización congelada; está
    deshabilitado mientras una corrección IA está en curso.
 3. **Sin asistencia** (`UNASSISTED`): igual pero el botón IA muestra "La corrección está
    desactivada en esta tarea" y no llama al backend.
@@ -113,26 +114,40 @@ corrección normal posterior a una prueba cancelada o guardada.
   pantalla de confirmación, una `ACTIVE` vuelve a la tarea con el cronómetro continuado y el texto
   escrito hasta ese momento (borrador persistido en disco, `PrefsExperimentDraftStore`; solo se
   borra al guardar, cancelar, salir de la pantalla o cerrar sesión, nunca durante la restauración).
-- **Finalización sin confirmar**: el texto, la duración y la `completion_key` se guardan en el
-  marcador antes de enviar `PATCH …/complete`; si el proceso muere antes del 200, al volver la
-  pantalla muestra "No pudimos confirmar que tu texto se guardó. Toca Reintentar." y reenvía
-  exactamente el mismo payload (el backend deduplica por clave).
+- **Finalizar y guardar**: al tocar el botón se congelan el texto y la duración en ese instante
+  (`elapsedRealtime()` menos la primera modificación del campo), se guardan en el marcador con la
+  `completion_key` y `app_version`, y la pantalla pasa a "Guardando…" (nada editable, sin IA ni
+  cancelar). Solo después se espera el feedback pendiente de la tira (una sugerencia abierta se
+  registra como rechazo; una edición en curso, con su texto) y se envía `PATCH …/complete` con
+  exactamente lo congelado: la latencia de esos envíos nunca entra en `duracion_ms`.
+- **Finalización sin confirmar**: si el proceso muere antes del 200, al volver la pantalla muestra
+  "No pudimos confirmar que tu texto se guardó. Toca Reintentar." y reenvía exactamente el mismo
+  payload (misma clave, misma `app_version` aunque el teclado se haya actualizado; el backend
+  deduplica por clave).
 - **Cancelación con motivo**: desde la tarea, "Cancelar prueba" → elegir motivo (abandono,
   problema técnico, interrupción) → confirmar; el backend queda `CANCELLED` con `failure_reason`.
-  Solo cuenta como cancelada cuando el backend responde (204, o 400/404 si ya estaba cerrada);
-  sin conexión se conserva la ejecución con "Reintentar", que reenvía el mismo motivo.
+  El motivo se guarda en el marcador antes de enviarlo. Solo cuenta como cancelada cuando el
+  backend responde (204, o 400/404 si ya estaba cerrada); sin conexión —o si el proceso muere en
+  vuelo— se conserva la ejecución con "No pudimos confirmar la cancelación. Toca Reintentar.", que
+  reenvía el mismo motivo antes que cualquier finalización pendiente. Mientras una cancelación
+  está en vuelo o sin confirmar, la IA queda bloqueada y no se envía `id_ejecucion`, también en
+  la condición asistida.
 - **Cronómetro perdido tras reiniciar el teléfono**: la duración medida con
   `elapsedRealtime()` no es comparable entre arranques; la pantalla lo muestra como "cronómetro
   perdido" y solo ofrece "Cancelar (problema técnico)", no finalizar. Si el proceso murió antes de
-  la primera tecla no se perdió nada: la tarea vuelve con el cronómetro en "—". El cronómetro
-  arranca solo con teclas escritas en el campo de la tarea (o al cambiar su texto), no en otras
-  apps; conviene pedir al alumno que no salga de la pantalla antes de empezar a escribir.
+  la primera modificación no se perdió nada: la tarea vuelve con el cronómetro en "—". El
+  cronómetro arranca únicamente desde la primera modificación del campo de la tarea (tecla,
+  pegado o dictado en esa pantalla), nunca desde el teclado en otra pantalla u otra app.
 - **Cerrar sesión con una prueba en curso**: el inicio pide confirmación ("Tienes una prueba en
-  curso…") porque borra el texto no guardado. Un 401 del backend durante la prueba cierra solo la
-  sesión local: al volver a entrar con la misma cuenta se reanuda con el mismo payload pendiente.
+  curso…") porque borra el texto no guardado; también mientras se comprueba una prueba que el
+  marcador da por activa o si esa comprobación falló. Un 401 del backend en cualquier llamada de
+  la prueba (incluida la comprobación inicial) cierra solo la sesión local: al volver a entrar con
+  la misma cuenta se reanuda con el mismo payload pendiente.
 - **Otra cuenta en el mismo teléfono**: el marcador y el borrador llevan el `userId` del alumno;
   iniciar sesión con otra cuenta descarta el estado local de la ejecución anterior (que sigue tal
-  cual en el backend para el investigador) antes de consultar la del nuevo alumno.
+  cual en el backend para el investigador) antes de consultar la del nuevo alumno. Un marcador o
+  borrador de una versión anterior del teclado (sin `userId`) no se descarta: se conserva mientras
+  se consulta y queda a nombre del alumno actual si el backend confirma la misma ejecución.
 
 ### 6. Resultado de la ejecución del 2026-09-15 (OnePlus 6, backend + IA locales)
 

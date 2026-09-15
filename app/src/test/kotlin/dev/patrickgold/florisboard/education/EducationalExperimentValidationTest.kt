@@ -16,8 +16,6 @@
 
 package dev.patrickgold.florisboard.education
 
-import dev.patrickgold.florisboard.ime.text.key.KeyCode
-import dev.patrickgold.florisboard.ime.text.key.KeyType
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 
@@ -31,7 +29,7 @@ class EducationalExperimentValidationTest : FunSpec({
         promptText = "Escribe un correo.",
         status = "PENDING",
     )
-    val pending = PendingCompletion(text = "hola", durationMs = 1_000, completionKey = "k")
+    val pending = PendingCompletion(text = "hola", durationMs = 1_000, completionKey = "k", appVersion = "1.0")
 
     context("code") {
         test("code normalization rejects ambiguous characters") {
@@ -168,30 +166,29 @@ class EducationalExperimentValidationTest : FunSpec({
             logoutNeedsConfirmation(
                 EducationalExperimentState.Failed(active, "x", retryable = true, pendingCancel = CancelReason.ABANDONED),
             ) shouldBe true
-            logoutNeedsConfirmation(EducationalExperimentState.Failed(active, "x", retryable = true)) shouldBe false
+            // Restauración fallida de una ejecución ACTIVE: el borrador sigue en disco y se perdería.
+            logoutNeedsConfirmation(EducationalExperimentState.Failed(active, "x", retryable = true)) shouldBe true
+            logoutNeedsConfirmation(EducationalExperimentState.Failed(run, "x", retryable = true)) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Failed(run.copy(status = "CLOSED"), "x", retryable = false)) shouldBe false
             logoutNeedsConfirmation(EducationalExperimentState.Failed(null, "x", retryable = false)) shouldBe false
             logoutNeedsConfirmation(EducationalExperimentState.Idle) shouldBe false
-            logoutNeedsConfirmation(EducationalExperimentState.Restoring(active)) shouldBe false
+            // Mientras GET /runs/active está en vuelo, el marcador ya dice que había una tarea en curso.
+            logoutNeedsConfirmation(EducationalExperimentState.Restoring(active)) shouldBe true
+            logoutNeedsConfirmation(EducationalExperimentState.Restoring(active.copy(status = "COMPLETING"))) shouldBe true
+            logoutNeedsConfirmation(EducationalExperimentState.Restoring(run)) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Restoring(null)) shouldBe false
             logoutNeedsConfirmation(EducationalExperimentState.Ready(run)) shouldBe false
             logoutNeedsConfirmation(EducationalExperimentState.Completed(run)) shouldBe false
             logoutNeedsConfirmation(EducationalExperimentState.Cancelled) shouldBe false
         }
     }
 
-    context("typing key") {
-        test("characters, numbers, space, enter and the delete keys start the chronometer; system keys do not") {
-            experimentTypingKey(code = 'a'.code, type = KeyType.CHARACTER) shouldBe true
-            experimentTypingKey(code = '7'.code, type = KeyType.NUMERIC) shouldBe true
-            experimentTypingKey(code = KeyCode.SPACE, type = KeyType.CHARACTER) shouldBe true
-            experimentTypingKey(code = KeyCode.ENTER, type = KeyType.ENTER_EDITING) shouldBe true
-            experimentTypingKey(code = KeyCode.DELETE, type = KeyType.ENTER_EDITING) shouldBe true
-            experimentTypingKey(code = KeyCode.DELETE_WORD, type = KeyType.ENTER_EDITING) shouldBe true
-            experimentTypingKey(code = KeyCode.FORWARD_DELETE, type = KeyType.ENTER_EDITING) shouldBe true
-            experimentTypingKey(code = KeyCode.FORWARD_DELETE_WORD, type = KeyType.ENTER_EDITING) shouldBe true
-            experimentTypingKey(code = KeyCode.SHIFT, type = KeyType.MODIFIER) shouldBe false
-            experimentTypingKey(code = KeyCode.VIEW_SYMBOLS, type = KeyType.SYSTEM_GUI) shouldBe false
-            experimentTypingKey(code = KeyCode.SETTINGS, type = KeyType.SYSTEM_GUI) shouldBe false
-            experimentTypingKey(code = 'a'.code, type = KeyType.FUNCTION) shouldBe false
+    context("draft owner") {
+        test("a draft belongs to the student who saved it, and a legacy draft without owner is adopted, never discarded") {
+            experimentDraftBelongsTo(storedOwner = "student_001", ownerUserId = "student_001") shouldBe true
+            experimentDraftBelongsTo(storedOwner = null, ownerUserId = "student_001") shouldBe true
+            experimentDraftBelongsTo(storedOwner = "", ownerUserId = "student_001") shouldBe true
+            experimentDraftBelongsTo(storedOwner = "student_002", ownerUserId = "student_001") shouldBe false
         }
     }
 
