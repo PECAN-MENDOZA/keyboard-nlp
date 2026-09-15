@@ -426,7 +426,7 @@ val EducationalBackendBaseUrls = listOf(
     BuildConfig.EDUCATION_BACKEND_BASE_URL,
 )
 
-private suspend fun <T> List<String>.firstSuccessful(
+internal suspend fun <T> List<String>.firstSuccessful(
     block: suspend (String) -> Result<T>,
 ): Result<T> {
     var lastFailure: Throwable? = null
