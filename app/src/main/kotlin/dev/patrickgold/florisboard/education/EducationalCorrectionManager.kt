@@ -36,10 +36,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 class EducationalCorrectionManager(context: Context) {
+    private val appContext: Context = context.applicationContext
     private val editorInstance by context.editorInstance()
     private val keyboardManager by context.keyboardManager()
     private val repository = EducationalApiRepository()
-    private val sessionStore = SecureEducationalSessionStore(context.applicationContext)
+    private val sessionStore = SecureEducationalSessionStore(appContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val prefs by FlorisPreferenceStore
     private var lastPrewarmAtMs: Long = 0L
@@ -66,15 +67,37 @@ class EducationalCorrectionManager(context: Context) {
                 repository.login(baseUrl = baseUrl, username = username, password = pin)
             }
         },
-        onSuccess = ::persistSession,
+        onSuccess = { newSession ->
+            persistSession(newSession)
+            // Una ejecución pendiente (o una finalización que falló por sesión vencida) sigue ahí.
+            experiment.restore()
+        },
     )
     val loginState: StateFlow<LoginState> = loginFlow.state
+
+    /**
+     * Escritura controlada (experimento). Sin ejecución activa la corrección funciona como siempre;
+     * en `UNASSISTED` [requestCorrection] avisa y no llama al backend; en `ASSISTED` la corrección
+     * lleva `id_ejecucion`. Sobrevive a una sesión vencida (la finalización pendiente se reenvía
+     * tras volver a entrar); solo [logout] lo borra.
+     */
+    val experiment = EducationalExperimentCoordinator(
+        scope = scope,
+        api = RepositoryExperimentApi(repository, EducationalBackendBaseUrls),
+        session = { currentSession() },
+        elapsedRealtime = SystemClock::elapsedRealtime,
+        appVersion = BuildConfig.VERSION_NAME,
+        store = PrefsExperimentMarkerStore(appContext),
+        bootId = { PrefsExperimentMarkerStore.bootId(appContext) },
+    )
 
     init {
         // Mientras hay algo aplicado o en edición, cada cambio de contenido se contrasta con el ancla.
         scope.launch {
             editorInstance.activeContentFlow.collect { content -> onContentChanged(content) }
         }
+        // Tras una muerte del proceso, el gate y las pantallas deben reflejar la ejecución vigente.
+        if (currentSession() != null) experiment.restore()
     }
 
     private fun loadValidSession(): EducationalSession? {
@@ -104,6 +127,7 @@ class EducationalCorrectionManager(context: Context) {
     fun logout() {
         clearSession()
         loginFlow.reset()
+        experiment.clear()
         reset()
         _connectionState.value = EducationalBackendConnectionState.Unknown
     }
@@ -162,11 +186,25 @@ class EducationalCorrectionManager(context: Context) {
         if (_state.value is EducationalCorrectionState.EditingInPlace) finishEdit() else reset()
     }
 
+    /**
+     * El alumno pulsó una tecla que escribe (carácter, espacio, borrar…). Solo importa como primera
+     * pulsación de una ejecución activa: arranca el cronómetro; el resto de pulsaciones se ignoran.
+     */
+    fun onUserKeyPress() {
+        if (experiment.state.value is EducationalExperimentState.Active) experiment.markFirstKey()
+    }
+
     // ---- Solicitud ------------------------------------------------------------------------
 
     fun requestCorrection() {
         if (_state.value is EducationalCorrectionState.Processing) return
         if (_state.value is EducationalCorrectionState.EditingInPlace) finishEdit()
+
+        // Escritura controlada sin asistencia: se avisa y no se toca el backend (que lo revalida).
+        if (!experiment.correctionAllowed()) {
+            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInTask, NoticeKind.INFO), NOTICE_MS)
+            return
+        }
 
         val session = _session.value
         if (session == null) {
@@ -213,7 +251,13 @@ class EducationalCorrectionManager(context: Context) {
                 return@launch
             }
             val result = EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
-                repository.processCorrection(baseUrl = baseUrl, token = activeSession.token, text = extractedText.text)
+                repository.processCorrection(
+                    baseUrl = baseUrl,
+                    token = activeSession.token,
+                    text = extractedText.text,
+                    // Solo en una ejecución ASSISTED activa; null en uso normal.
+                    experimentRunId = experiment.activeRunId(),
+                )
             }
             // Si mientras tanto cambió el campo o el alumno cerró, la respuesta ya no interesa.
             if (_state.value != processing) return@launch
@@ -420,6 +464,13 @@ class EducationalCorrectionManager(context: Context) {
 }
 
 private const val PREWARM_DEBOUNCE_MS = 2 * 60 * 1000L // 2 minutos
+
+/**
+ * Gate puro del botón IA según la condición de la ejecución activa: solo `UNASSISTED` bloquea,
+ * con el aviso que ve el alumno; sin ejecución (null) o `ASSISTED` no hay bloqueo.
+ */
+internal fun correctionBlockMessage(condition: ExperimentCondition?): String? =
+    if (condition == ExperimentCondition.UNASSISTED) EducationalMessages.CorrectionDisabledInTask else null
 
 // URL del backend. Se define en build.gradle.kts (buildConfigField EDUCATION_BACKEND_BASE_URL).
 val EducationalBackendBaseUrls = listOf(

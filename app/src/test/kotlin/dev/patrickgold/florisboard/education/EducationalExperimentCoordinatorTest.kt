@@ -812,6 +812,20 @@ class EducationalExperimentCoordinatorTest : FunSpec({
             }
         }
 
+        test("restore never trusts a marker whose boot id is unknown, even if it matches") {
+            runTest {
+                val api = FakeExperimentApi(activeRun = run(ExperimentCondition.ASSISTED))
+                val unknown = EducationalExperimentCoordinator.UnknownBootId
+                val store = FakeMarkerStore(marker(firstKeyAtMs = 400, bootId = unknown))
+                val coordinator = coordinator(api, FakeElapsedClock(1_000), store, bootId = unknown)
+                coordinator.restore()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe
+                    EducationalExperimentState.Active(run(ExperimentCondition.ASSISTED), firstKeyAtMs = null, timerLost = true)
+                coordinator.completionBlockedReason() shouldBe EducationalMessages.TimerLost
+            }
+        }
+
         test("restore after a reboot loses the timer and refuses completion") {
             runTest {
                 val api = FakeExperimentApi(activeRun = run(ExperimentCondition.UNASSISTED))

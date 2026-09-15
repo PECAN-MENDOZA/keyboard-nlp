@@ -29,6 +29,7 @@ import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.appContext
 import dev.patrickgold.florisboard.clipboardManager
 import dev.patrickgold.florisboard.editorInstance
+import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.extensionManager
 import dev.patrickgold.florisboard.ime.ImeUiMode
 import dev.patrickgold.florisboard.ime.core.DisplayLanguageNamesIn
@@ -87,6 +88,7 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     private val appContext by context.appContext()
     private val clipboardManager by context.clipboardManager()
     private val editorInstance by context.editorInstance()
+    private val educationalCorrectionManager by context.educationalCorrectionManager()
     private val extensionManager by context.extensionManager()
     private val nlpManager by context.nlpManager()
     private val subtypeManager by context.subtypeManager()
@@ -687,6 +689,7 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
 
     override fun onInputKeyUp(data: KeyData) = activeState.batchEdit {
         val windowController = FlorisImeService.windowControllerOrNull() ?: return@batchEdit
+        if (data.isTypingKey()) educationalCorrectionManager.onUserKeyPress()
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -1026,4 +1029,13 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
             )
         }
     }
+}
+
+/**
+ * Tecla que escribe en el campo (carácter, número, espacio, Enter, borrar): cuenta como primera
+ * pulsación de una escritura controlada. Las teclas de sistema (cambiar vista, ajustes…) no.
+ */
+private fun KeyData.isTypingKey(): Boolean = when (code) {
+    KeyCode.DELETE, KeyCode.DELETE_WORD, KeyCode.FORWARD_DELETE, KeyCode.FORWARD_DELETE_WORD -> true
+    else -> code >= KeyCode.Spec.CHARACTERS_MIN && (type == KeyType.CHARACTER || type == KeyType.NUMERIC)
 }

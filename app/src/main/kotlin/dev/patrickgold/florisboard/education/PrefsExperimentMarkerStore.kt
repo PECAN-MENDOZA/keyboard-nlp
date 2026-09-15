@@ -32,11 +32,12 @@ class PrefsExperimentMarkerStore(context: Context) : ExperimentMarkerStore {
     }
 
     override fun save(marker: ExperimentMarker) {
-        prefs.edit().putString(Key, json.encodeToString(marker)).apply()
+        // commit(): el marcador debe estar en disco antes de que el proceso pueda morir.
+        prefs.edit().putString(Key, json.encodeToString(marker)).commit()
     }
 
     override fun clear() {
-        prefs.edit().remove(Key).apply()
+        prefs.edit().remove(Key).commit()
     }
 
     companion object {
@@ -45,6 +46,7 @@ class PrefsExperimentMarkerStore(context: Context) : ExperimentMarkerStore {
 
         /** Identifica el arranque actual del teléfono: `elapsedRealtime` solo es comparable dentro del mismo. */
         fun bootId(context: Context): String =
-            Settings.Global.getString(context.contentResolver, "boot_count") ?: "unknown"
+            Settings.Global.getString(context.contentResolver, "boot_count")
+                ?: EducationalExperimentCoordinator.UnknownBootId
     }
 }

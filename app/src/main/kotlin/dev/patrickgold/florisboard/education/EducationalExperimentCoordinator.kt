@@ -301,7 +301,7 @@ class EducationalExperimentCoordinator(
                     when (run?.status) {
                         StatusActive -> {
                             val firstKey = marker?.firstKeyAtMs
-                                ?.takeIf { marker.runId == run.id && marker.bootId == bootId() }
+                                ?.takeIf { marker.runId == run.id && marker.bootId != UnknownBootId && marker.bootId == bootId() }
                             transition(EducationalExperimentState.Active(run, firstKey, timerLost = firstKey == null)) {
                                 saveMarker(run, firstKey)
                             }
@@ -468,6 +468,8 @@ class EducationalExperimentCoordinator(
         this !is EducationalHttpException || status >= 500 || status == 401
 
     companion object {
+        /** `bootId` cuando el teléfono no expone `boot_count`: nunca cuenta como "el mismo arranque". */
+        const val UnknownBootId = "unknown"
         /** Ocho caracteres no ambiguos: sin 0/O, 1/I. */
         private val AccessCodePattern = Regex("[A-HJ-NP-Z2-9]{8}")
         private const val StatusActive = "ACTIVE"
