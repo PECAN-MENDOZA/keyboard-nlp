@@ -128,6 +128,7 @@ class EducationalCorrectionManager(context: Context) {
         clearSession()
         loginFlow.reset()
         experiment.clear()
+        PrefsExperimentDraftStore(appContext).clear()
         reset()
         _connectionState.value = EducationalBackendConnectionState.Unknown
     }

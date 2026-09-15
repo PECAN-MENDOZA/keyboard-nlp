@@ -129,6 +129,20 @@ class EducationalExperimentValidationTest : FunSpec({
         }
     }
 
+    context("draft") {
+        test("the draft only survives while the run is still writable") {
+            experimentDraftShouldClear(EducationalExperimentState.Idle) shouldBe true
+            experimentDraftShouldClear(EducationalExperimentState.Cancelled) shouldBe true
+            experimentDraftShouldClear(EducationalExperimentState.Completed(run)) shouldBe true
+            experimentDraftShouldClear(EducationalExperimentState.Redeeming) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Ready(run)) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Starting(run)) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Active(run, firstKeyAtMs = null)) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Completing(run, "x", 1_000, "k")) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Failed(run, "x", retryable = true)) shouldBe false
+        }
+    }
+
     test("condition labels never expose the raw enum and no selector wording") {
         EducationalMessages.conditionLabel(ExperimentCondition.ASSISTED) shouldBe "Con asistencia de la IA"
         EducationalMessages.conditionLabel(ExperimentCondition.UNASSISTED) shouldBe "Sin asistencia"

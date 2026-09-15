@@ -76,6 +76,17 @@ fun experimentFinishEnabled(text: String, completing: Boolean, blockedReason: St
 fun limitExperimentText(text: String): String = text.take(ExperimentMaxTextLength)
 
 /**
+ * El borrador en disco ([ExperimentDraftStore]) solo tiene sentido mientras hay una ejecución que
+ * todavía se puede retomar: sin ejecución, guardada o cancelada ya no hace falta y se limpia.
+ */
+fun experimentDraftShouldClear(state: EducationalExperimentState): Boolean = when (state) {
+    EducationalExperimentState.Idle,
+    is EducationalExperimentState.Completed,
+    EducationalExperimentState.Cancelled -> true
+    else -> false
+}
+
+/**
  * Qué muestra la pantalla en [EducationalExperimentState.Failed]:
  * - [codeField]: el campo del código otra vez (canje fallido: no hay ejecución).
  * - [runCard]: participante, consigna y condición (inicio fallido de una ejecución PENDING).

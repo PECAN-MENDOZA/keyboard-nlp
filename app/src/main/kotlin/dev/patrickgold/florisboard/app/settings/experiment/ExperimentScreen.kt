@@ -75,8 +75,10 @@ import dev.patrickgold.florisboard.education.EducationalMessages
 import dev.patrickgold.florisboard.education.ExperimentCodeLength
 import dev.patrickgold.florisboard.education.ExperimentMaxTextLength
 import dev.patrickgold.florisboard.education.ExperimentRunResponse
+import dev.patrickgold.florisboard.education.PrefsExperimentDraftStore
 import dev.patrickgold.florisboard.education.experimentCodeHint
 import dev.patrickgold.florisboard.education.experimentCodeReady
+import dev.patrickgold.florisboard.education.experimentDraftShouldClear
 import dev.patrickgold.florisboard.education.experimentDurationMs
 import dev.patrickgold.florisboard.education.experimentFailedActions
 import dev.patrickgold.florisboard.education.experimentFinishEnabled
@@ -108,6 +110,7 @@ fun ExperimentScreen() = FlorisScreen {
         val hasSession = session?.takeUnless { it.isExpired() } != null
         val experiment = manager.experiment
         val state by experiment.state.collectAsState()
+        val draftStore = remember { PrefsExperimentDraftStore(context) }
 
         // Una sola restauración por instancia de la pantalla (la rotación no la repite): una
         // ejecución PENDING/ACTIVE vuelve a aparecer. Una prueba recién guardada o cancelada se
@@ -122,6 +125,12 @@ fun ExperimentScreen() = FlorisScreen {
             }
         }
 
+        // El borrador en disco ya no hace falta en cuanto la ejecución deja de ser retomable
+        // (guardada, cancelada o inexistente); ver `experimentDraftShouldClear`.
+        LaunchedEffect(state) {
+            if (experimentDraftShouldClear(state)) draftStore.clear()
+        }
+
         if (!hasSession) {
             NoSessionPhase(onBack = { navController.popBackStack() })
             return@content
@@ -129,9 +138,9 @@ fun ExperimentScreen() = FlorisScreen {
 
         val runId = state.runOrNull()?.id
         var code by rememberSaveable { mutableStateOf("") }
-        // El texto sobrevive a la rotación (rememberSaveable) y a salir/volver a la pantalla dentro
-        // del mismo proceso (borrador en memoria por ejecución).
-        var text by rememberSaveable(runId) { mutableStateOf(runId?.let(ExperimentDraft::load) ?: "") }
+        // El texto sobrevive a la rotación (rememberSaveable) y a que Android mate el proceso
+        // (borrador en disco por ejecución, PrefsExperimentDraftStore).
+        var text by rememberSaveable(runId) { mutableStateOf(runId?.let(draftStore::load) ?: "") }
         var cancelDialogOpen by rememberSaveable { mutableStateOf(false) }
         var cancelReason by rememberSaveable { mutableStateOf(CancelReason.ABANDONED.name) }
         var completionRejected by rememberSaveable { mutableStateOf(false) }
@@ -142,7 +151,7 @@ fun ExperimentScreen() = FlorisScreen {
             cancelDialogOpen = true
         }
         val leave: () -> Unit = {
-            ExperimentDraft.clear()
+            draftStore.clear()
             experiment.clear()
             navController.popBackStack()
         }
@@ -186,7 +195,7 @@ fun ExperimentScreen() = FlorisScreen {
                         if (limited.isNotEmpty()) experiment.markFirstKey()
                         text = limited
                         completionRejected = false
-                        ExperimentDraft.save(current.run.id, limited)
+                        draftStore.save(current.run.id, limited)
                     },
                     blockedReason = blockedReason,
                     completionRejected = completionRejected,
@@ -675,25 +684,4 @@ private fun EducationalExperimentState.runOrNull(): ExperimentRunResponse? = whe
     EducationalExperimentState.Idle,
     EducationalExperimentState.Redeeming,
     EducationalExperimentState.Cancelled -> null
-}
-
-/**
- * Borrador en memoria del texto de la tarea, por ejecución: si el alumno sale de la pantalla
- * (por ejemplo para volver a iniciar sesión) y regresa dentro del mismo proceso, no pierde lo escrito.
- */
-private object ExperimentDraft {
-    private var runId: String? = null
-    private var text: String = ""
-
-    fun load(runId: String): String = if (this.runId == runId) text else ""
-
-    fun save(runId: String, text: String) {
-        this.runId = runId
-        this.text = text
-    }
-
-    fun clear() {
-        runId = null
-        text = ""
-    }
 }
