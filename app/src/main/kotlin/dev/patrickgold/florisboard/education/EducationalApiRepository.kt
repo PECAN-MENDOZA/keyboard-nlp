@@ -57,6 +57,7 @@ class EducationalApiRepository {
         baseUrl: String,
         token: String,
         text: String,
+        experimentRunId: String? = null,
     ): Result<CorrectionSessionResponse> = withContext(Dispatchers.IO) {
         runCatching {
             val response = request(
@@ -64,9 +65,105 @@ class EducationalApiRepository {
                 path = "/corrections/process",
                 method = "POST",
                 token = token,
-                body = json.encodeToString(ProcessCorrectionRequest(text)),
+                body = json.encodeToString(ProcessCorrectionRequest(text, experimentRunId)),
             )
             json.decodeFromString<CorrectionSessionResponse>(response)
+        }
+    }
+
+    suspend fun redeemExperimentCode(
+        baseUrl: String,
+        token: String,
+        code: String,
+    ): Result<ExperimentRunResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/experiments/access-code/redeem",
+                method = "POST",
+                token = token,
+                body = json.encodeToString(RedeemAccessCodeRequest(code)),
+            )
+            json.decodeFromString<ExperimentRunResponse>(response)
+        }
+    }
+
+    suspend fun startExperiment(
+        baseUrl: String,
+        token: String,
+        runId: String,
+    ): Result<ExperimentRunResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/experiments/runs/$runId/start",
+                method = "POST",
+                token = token,
+                body = null,
+            )
+            json.decodeFromString<ExperimentRunResponse>(response)
+        }
+    }
+
+    /** Restaura una ejecución vigente (ACTIVE o PENDING) tras reabrir la app. Sin nada que restaurar: `null`. */
+    suspend fun activeExperiment(
+        baseUrl: String,
+        token: String,
+    ): Result<ExperimentRunResponse?> = withContext(Dispatchers.IO) {
+        runCatching {
+            try {
+                val response = request(
+                    baseUrl = baseUrl,
+                    path = "/experiments/runs/active",
+                    method = "GET",
+                    token = token,
+                    body = null,
+                )
+                json.decodeFromString<ExperimentRunResponse>(response)
+            } catch (error: EducationalHttpException) {
+                if (error.status == 404) null else throw error
+            }
+        }
+    }
+
+    suspend fun completeExperiment(
+        baseUrl: String,
+        token: String,
+        runId: String,
+        finalText: String,
+        durationMs: Long,
+        completionKey: String,
+        appVersion: String,
+    ): Result<ExperimentRunResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/experiments/runs/$runId/complete",
+                method = "PATCH",
+                token = token,
+                body = json.encodeToString(
+                    CompleteExperimentRequest(finalText, durationMs, completionKey, appVersion),
+                ),
+            )
+            json.decodeFromString<ExperimentRunResponse>(response)
+        }
+    }
+
+    suspend fun cancelExperiment(
+        baseUrl: String,
+        token: String,
+        runId: String,
+        reason: CancelReason,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            request(
+                baseUrl = baseUrl,
+                path = "/experiments/runs/$runId/cancel",
+                method = "POST",
+                token = token,
+                body = json.encodeToString(CancelExperimentRequest(reason)),
+            )
+            Unit
         }
     }
 

@@ -41,6 +41,9 @@ object EducationalMessages {
     const val Corrected = "Corregido"
     const val Editing = "Editando"
 
+    // Experimento
+    const val InvalidAccessCode = "Ese código no sirve. Pídele uno nuevo al investigador."
+
     // App
     const val AppTitle = "Teclado adaptativo"
     const val LoginIntro = "Inicia sesión para usar la corrección con IA."
@@ -106,6 +109,21 @@ object EducationalMessages {
             else -> "No se pudo corregir (código ${error.status})."
         }
         else -> if (error.isNetworkFailure()) AiUnavailable else "No se pudo corregir."
+    }
+
+    fun experiment(error: Throwable): String = when (error) {
+        is EducationalHttpException -> when (error.status) {
+            400 -> InvalidAccessCode
+            401 -> SessionExpired
+            404 -> "Esa prueba ya no está disponible."
+            409 -> "Esa prueba ya fue guardada."
+            else -> "No se pudo continuar con la prueba (código ${error.status})."
+        }
+        else -> if (error.isNetworkFailure()) {
+            "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo."
+        } else {
+            "No se pudo continuar con la prueba."
+        }
     }
 
     /** Vale la pena ofrecer "Reintentar": IA caída (502) o fallo de red transitorio. */

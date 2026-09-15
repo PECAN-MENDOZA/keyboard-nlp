@@ -87,6 +87,35 @@ class EducationalMessagesTest : FunSpec({
         }
     }
 
+    context("experiment") {
+        test("400 is an invalid access code") {
+            EducationalMessages.experiment(EducationalHttpException(400, "")) shouldBe
+                EducationalMessages.InvalidAccessCode
+        }
+        test("401 is an expired session") {
+            EducationalMessages.experiment(EducationalHttpException(401, "")) shouldBe
+                EducationalMessages.SessionExpired
+        }
+        test("404 means the run is gone") {
+            EducationalMessages.experiment(EducationalHttpException(404, "")) shouldBe
+                "Esa prueba ya no está disponible."
+        }
+        test("409 means the run was already saved") {
+            EducationalMessages.experiment(EducationalHttpException(409, "")) shouldBe
+                "Esa prueba ya fue guardada."
+        }
+        test("any network failure asks to check the connection") {
+            networkErrors.forEach { error ->
+                EducationalMessages.experiment(error) shouldBe
+                    "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo."
+            }
+        }
+        test("unknown http codes include the code") {
+            EducationalMessages.experiment(EducationalHttpException(418, "")) shouldBe
+                "No se pudo continuar con la prueba (código 418)."
+        }
+    }
+
     test("recommended label is pluralized") {
         EducationalMessages.recommendedLabel(1) shouldBe "Recomendada · 1 cambio"
         EducationalMessages.recommendedLabel(3) shouldBe "Recomendada · 3 cambios"
@@ -119,12 +148,15 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.Undo, EducationalMessages.Done,
             EducationalMessages.Close, EducationalMessages.CloseDescription,
             EducationalMessages.AvatarDescription,
+            EducationalMessages.InvalidAccessCode,
         ) + networkErrors.map { EducationalMessages.login(it) } +
             networkErrors.map { EducationalMessages.correction(it) } +
-            listOf(400, 401, 403, 404, 418, 502, 503).flatMap { code ->
+            networkErrors.map { EducationalMessages.experiment(it) } +
+            listOf(400, 401, 403, 404, 409, 418, 502, 503).flatMap { code ->
                 listOf(
                     EducationalMessages.login(EducationalHttpException(code, "")),
                     EducationalMessages.correction(EducationalHttpException(code, "")),
+                    EducationalMessages.experiment(EducationalHttpException(code, "")),
                 )
             }
         all.forEach { text ->
