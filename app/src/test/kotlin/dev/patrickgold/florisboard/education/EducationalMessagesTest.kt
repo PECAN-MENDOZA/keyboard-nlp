@@ -87,6 +87,55 @@ class EducationalMessagesTest : FunSpec({
         }
     }
 
+    context("experiment") {
+        test("400 is an invalid access code only when redeeming") {
+            EducationalMessages.experiment(EducationalHttpException(400, ""), ExperimentOp.REDEEM) shouldBe
+                EducationalMessages.InvalidAccessCode
+        }
+        test("400 on start, complete or cancel means the run is no longer active") {
+            listOf(ExperimentOp.START, ExperimentOp.COMPLETE, ExperimentOp.CANCEL).forEach { op ->
+                EducationalMessages.experiment(EducationalHttpException(400, ""), op) shouldBe
+                    EducationalMessages.ExperimentNotActive
+            }
+            EducationalMessages.ExperimentNotActive shouldBe "Esta prueba ya no está activa. Avisa al investigador."
+            EducationalMessages.experiment(EducationalHttpException(400, ""), ExperimentOp.RESTORE) shouldBe
+                "No se pudo continuar con la prueba (código 400)."
+        }
+        test("401 is an expired session") {
+            ExperimentOp.entries.forEach { op ->
+                EducationalMessages.experiment(EducationalHttpException(401, ""), op) shouldBe
+                    EducationalMessages.SessionExpired
+            }
+        }
+        test("404 means the run is gone") {
+            EducationalMessages.experiment(EducationalHttpException(404, ""), ExperimentOp.COMPLETE) shouldBe
+                "Esa prueba ya no está disponible."
+        }
+        test("409 on complete is a conflict the student can retry") {
+            EducationalMessages.experiment(EducationalHttpException(409, ""), ExperimentOp.COMPLETE) shouldBe
+                EducationalMessages.ExperimentCompletionConflict
+            EducationalMessages.ExperimentCompletionConflict shouldBe "No pudimos guardar tu texto. Toca Reintentar."
+        }
+        test("the pending completion and pending cancel notices ask to retry") {
+            EducationalMessages.ExperimentCompletionPending shouldBe
+                "No pudimos confirmar que tu texto se guardó. Toca Reintentar."
+            EducationalMessages.ExperimentCancelPending shouldBe
+                "No pudimos confirmar la cancelación. Toca Reintentar."
+        }
+        test("any network failure asks to check the connection") {
+            ExperimentOp.entries.forEach { op ->
+                networkErrors.forEach { error ->
+                    EducationalMessages.experiment(error, op) shouldBe
+                        "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo."
+                }
+            }
+        }
+        test("unknown http codes include the code") {
+            EducationalMessages.experiment(EducationalHttpException(418, ""), ExperimentOp.START) shouldBe
+                "No se pudo continuar con la prueba (código 418)."
+        }
+    }
+
     test("recommended label is pluralized") {
         EducationalMessages.recommendedLabel(1) shouldBe "Recomendada · 1 cambio"
         EducationalMessages.recommendedLabel(3) shouldBe "Recomendada · 3 cambios"
@@ -119,13 +168,42 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.Undo, EducationalMessages.Done,
             EducationalMessages.Close, EducationalMessages.CloseDescription,
             EducationalMessages.AvatarDescription,
-        ) + networkErrors.map { EducationalMessages.login(it) } +
+            EducationalMessages.InvalidAccessCode, EducationalMessages.TimerLost,
+            EducationalMessages.CorrectionDisabledInTask,
+            EducationalMessages.ExperimentTitle, EducationalMessages.ExperimentNoSession,
+            EducationalMessages.ExperimentBackHome, EducationalMessages.ExperimentCodeIntro,
+            EducationalMessages.ExperimentCodeLabel, EducationalMessages.ExperimentValidateCode,
+            EducationalMessages.ExperimentValidating, EducationalMessages.ExperimentReadyTitle,
+            EducationalMessages.ExperimentReadyIntro, EducationalMessages.ExperimentParticipantLabel,
+            EducationalMessages.ExperimentPromptLabel, EducationalMessages.ExperimentConditionLabel,
+            EducationalMessages.ConditionAssisted, EducationalMessages.ConditionUnassisted,
+            EducationalMessages.ExperimentStart, EducationalMessages.ExperimentStarting,
+            EducationalMessages.ExperimentTextLabel, EducationalMessages.ExperimentElapsedLabel,
+            EducationalMessages.ExperimentElapsedNone, EducationalMessages.ExperimentFinish,
+            EducationalMessages.ExperimentSaving, EducationalMessages.ExperimentSavingDetail,
+            EducationalMessages.ExperimentCancel, EducationalMessages.ExperimentCancelTitle,
+            EducationalMessages.ExperimentCancelIntro, EducationalMessages.CancelReasonAbandoned,
+            EducationalMessages.CancelReasonTechnical, EducationalMessages.CancelReasonInterrupted,
+            EducationalMessages.ExperimentKeepGoing, EducationalMessages.ExperimentRetry,
+            EducationalMessages.ExperimentCloseAction, EducationalMessages.ExperimentBack,
+            EducationalMessages.ExperimentCompleted, EducationalMessages.ExperimentCompletedDetail,
+            EducationalMessages.ExperimentCancelled, EducationalMessages.ExperimentCancelledDetail,
+            EducationalMessages.ExperimentPrivacy, EducationalMessages.ExperimentCompletionRejected,
+            EducationalMessages.ExperimentRestoring, EducationalMessages.ExperimentCancelling,
+            EducationalMessages.ExperimentNotActive, EducationalMessages.ExperimentCompletionPending,
+            EducationalMessages.ExperimentCompletionConflict, EducationalMessages.LogoutDuringExperiment,
+            EducationalMessages.ExperimentCancelPending,
+            EducationalMessages.textCounter(12, 10_000), EducationalMessages.elapsedDescription("1:05"),
+        ) + ExperimentCondition.entries.map { EducationalMessages.conditionLabel(it) } +
+            CancelReason.entries.map { EducationalMessages.cancelReasonLabel(it) } +
+            networkErrors.map { EducationalMessages.login(it) } +
             networkErrors.map { EducationalMessages.correction(it) } +
-            listOf(400, 401, 403, 404, 418, 502, 503).flatMap { code ->
+            ExperimentOp.entries.flatMap { op -> networkErrors.map { EducationalMessages.experiment(it, op) } } +
+            listOf(400, 401, 403, 404, 409, 418, 502, 503).flatMap { code ->
                 listOf(
                     EducationalMessages.login(EducationalHttpException(code, "")),
                     EducationalMessages.correction(EducationalHttpException(code, "")),
-                )
+                ) + ExperimentOp.entries.map { EducationalMessages.experiment(EducationalHttpException(code, ""), it) }
             }
         all.forEach { text ->
             text shouldNotContainIgnoringCase "cloud run"

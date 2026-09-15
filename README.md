@@ -22,3 +22,144 @@ Linux or macOS:
 ```bash
 ./gradlew :app:assembleDebug
 ```
+
+## Prueba en dispositivo: modo experimental (OnePlus)
+
+Procedimiento para repetir en un teléfono real la escritura controlada ("Participar en una
+prueba") de las tres condiciones: normal, `ASSISTED` y `UNASSISTED`. Todos los comandos son de
+`adb`/PowerShell, sin editor de código en el teléfono.
+
+### 1. Stack local
+
+Desde `C:\Users\Dovamul\Desktop\TESIS` (no desde este repo):
+
+```powershell
+.\local.ps1 Start   # backend + Postgres + (si está disponible) la IA
+.\local.ps1 Check    # confirma que sigue arriba
+adb reverse tcp:8080 tcp:8080
+```
+
+La IA (`IA-Correcci-n-Contextual`) es opcional para las pruebas `ASSISTED`; no tiene `/health`, se
+sondea con una corrección real:
+
+```powershell
+$body = @{ originalText = 'prueba local'; studentId = 'local-health' } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:5000/interno/corregir' `
+    -ContentType 'application/json' -Body $body -TimeoutSec 90
+```
+
+### 2. Instalar el teclado en el teléfono
+
+```powershell
+.\gradlew.bat :app:assembleDebug
+adb install -r app\build\outputs\apk\debug\app-debug.apk
+adb shell ime set com.mvptesis.keyboard.debug/dev.patrickgold.florisboard.FlorisImeService
+```
+
+El último comando hay que repetirlo cada vez que se reinstala el APK o tras un
+`am force-stop` (ver "Casos de robustez" abajo): Android vuelve al IME por defecto
+(LatinIME) y hay que reseleccionar FlorisBoard.
+
+### 3. Investigador: crear estudio, participante y código
+
+Con las rutas de `backend/docs/research-api.md` (sección "Participantes y códigos"). No pegar
+contraseñas ni tokens en este README:
+
+```http
+POST /api/v1/auth/staff/login                                              → token de investigador
+POST /api/v1/research/studies                                              → studyId
+POST /api/v1/research/studies/{studyId}/protocols                          → protocolId
+POST /api/v1/research/studies/{studyId}/protocols/{protocolId}/activate
+POST /api/v1/research/studies/{studyId}/participants                       → participantId (P-001…)
+POST /api/v1/research/studies/{studyId}/participants/{participantId}/access-code
+                                                                             → código de 8 caracteres, una sola vez
+```
+
+El código canjeado en el teléfono asigna automáticamente la condición y la consigna (el alumno
+nunca las elige): la primera sesión de cada participante es `TASK_A`, la segunda `TASK_B`, y el
+orden asistida/sin-asistencia lo fija la secuencia del participante (impar → `ASSISTED_FIRST`).
+
+### 4. Los tres checks del plan
+
+1. **Normal** (sin canjear ningún código): corregir texto en cualquier app con Simple Notes o
+   similar; debe comportarse exactamente igual que sin modo experimental.
+2. **Asistida** (`ASSISTED`): canjear el código en "Participar en una prueba" → Comenzar →
+   escribir → usar la IA (crea `correction_session` con `experiment_run_id`) → "Finalizar y
+   guardar". El botón cierra la sugerencia que siga abierta (cuenta como rechazo), congela el
+   texto y la duración en ese instante y espera a que todo el feedback (aceptar, rechazar,
+   editar, deshacer) llegue al backend antes de enviar la finalización congelada; está
+   deshabilitado mientras una corrección IA está en curso.
+3. **Sin asistencia** (`UNASSISTED`): igual pero el botón IA muestra "La corrección está
+   desactivada en esta tarea" y no llama al backend.
+
+Verificar en la base del backend después de cada ejecución:
+
+```sql
+select status, duration_ms, incident_count, failure_reason, left(final_text, 60)
+from experiment_runs order by created_at desc limit 1;
+
+select experiment_run_id from correction_sessions order by created_at desc limit 1;
+```
+
+`experiment_run_id` debe llevar el id de la ejecución en la prueba asistida y quedar `NULL` en una
+corrección normal posterior a una prueba cancelada o guardada.
+
+### 5. Casos de robustez
+
+- **Restauración PENDING/ACTIVE tras matar el proceso**: `adb shell am force-stop
+  com.mvptesis.keyboard.debug`, reseleccionar el IME (paso 2), abrir el deeplink
+  `ui://florisboard/settings/experiment` (o navegar a "Participar en una prueba"): mientras
+  `GET /runs/active` está en vuelo la pantalla muestra "Comprobando tu prueba…" (nunca el campo
+  del código) y el gate de IA ya sigue al marcador en disco; una ejecución `PENDING` vuelve a la
+  pantalla de confirmación, una `ACTIVE` vuelve a la tarea con el cronómetro continuado y el texto
+  escrito hasta ese momento (borrador persistido en disco, `PrefsExperimentDraftStore`; solo se
+  borra al guardar, cancelar, salir de la pantalla o cerrar sesión, nunca durante la restauración).
+- **Finalizar y guardar**: al tocar el botón se congelan el texto y la duración en ese instante
+  (`elapsedRealtime()` menos la primera modificación del campo), se guardan en el marcador con la
+  `completion_key` y `app_version`, y la pantalla pasa a "Guardando…" (nada editable, sin IA ni
+  cancelar). Solo después se espera el feedback pendiente de la tira (una sugerencia abierta se
+  registra como rechazo; una edición en curso, con su texto) y se envía `PATCH …/complete` con
+  exactamente lo congelado: la latencia de esos envíos nunca entra en `duracion_ms`.
+- **Finalización sin confirmar**: si el proceso muere antes del 200, al volver la pantalla muestra
+  "No pudimos confirmar que tu texto se guardó. Toca Reintentar." y reenvía exactamente el mismo
+  payload (misma clave, misma `app_version` aunque el teclado se haya actualizado; el backend
+  deduplica por clave).
+- **Cancelación con motivo**: desde la tarea, "Cancelar prueba" → elegir motivo (abandono,
+  problema técnico, interrupción) → confirmar; el backend queda `CANCELLED` con `failure_reason`.
+  El motivo se guarda en el marcador antes de enviarlo. Solo cuenta como cancelada cuando el
+  backend responde (204, o 400/404 si ya estaba cerrada); sin conexión —o si el proceso muere en
+  vuelo— se conserva la ejecución con "No pudimos confirmar la cancelación. Toca Reintentar.", que
+  reenvía el mismo motivo antes que cualquier finalización pendiente. Mientras una cancelación
+  está en vuelo o sin confirmar, la IA queda bloqueada y no se envía `id_ejecucion`, también en
+  la condición asistida.
+- **Cronómetro perdido tras reiniciar el teléfono**: la duración medida con
+  `elapsedRealtime()` no es comparable entre arranques; la pantalla lo muestra como "cronómetro
+  perdido" y solo ofrece "Cancelar (problema técnico)", no finalizar. Si el proceso murió antes de
+  la primera modificación no se perdió nada: la tarea vuelve con el cronómetro en "—". El
+  cronómetro arranca únicamente desde la primera modificación del campo de la tarea (tecla,
+  pegado o dictado en esa pantalla), nunca desde el teclado en otra pantalla u otra app.
+- **Cerrar sesión con una prueba en curso**: el inicio pide confirmación ("Tienes una prueba en
+  curso…") porque borra el texto no guardado; también mientras se comprueba una prueba que el
+  marcador da por activa o si esa comprobación falló. Un 401 del backend en cualquier llamada de
+  la prueba (incluida la comprobación inicial) cierra solo la sesión local: al volver a entrar con
+  la misma cuenta se reanuda con el mismo payload pendiente.
+- **Otra cuenta en el mismo teléfono**: el marcador y el borrador llevan el `userId` del alumno;
+  iniciar sesión con otra cuenta descarta el estado local de la ejecución anterior (que sigue tal
+  cual en el backend para el investigador) antes de consultar la del nuevo alumno. Un marcador o
+  borrador de una versión anterior del teclado (sin `userId`) no se descarta: se conserva mientras
+  se consulta y queda a nombre del alumno actual si el backend confirma la misma ejecución.
+
+### 6. Resultado de la ejecución del 2026-09-15 (OnePlus 6, backend + IA locales)
+
+| Caso | Resultado |
+|---|---|
+| Asistida (P-001, TASK_A) | `COMPLETED`, `duration_ms = 458273`, texto final guardado, `app_version = 0.6.0-debug+3afd841`, incidencia previa `AI_REQUEST_FAILED` conservada (`incident_count = 1`) |
+| Sin asistencia (P-001, TASK_B) — botón IA | Aviso local "La corrección está desactivada en esta tarea"; ninguna `correction_session` creada (229 → 229) |
+| Sin asistencia — restauración PENDING tras `force-stop` | OK, vuelve a la pantalla de confirmación |
+| Sin asistencia — restauración ACTIVE tras `force-stop` | OK, cronómetro continuado (2:05) |
+| Sin asistencia — cancelación | Diálogo con 3 motivos → backend `CANCELLED`, `failure_reason = "Cancelled by the student: interrupted"` |
+| Corrección normal tras cancelar | Sesión nueva con `experiment_run_id = NULL` |
+
+Hueco encontrado y cerrado en esta tarea: tras `force-stop` en `ACTIVE` el cronómetro se
+restauraba pero el texto escrito se perdía (`ExperimentDraft` vivía solo en memoria); ahora se
+guarda en disco por ejecución (`education/PrefsExperimentDraftStore.kt`).

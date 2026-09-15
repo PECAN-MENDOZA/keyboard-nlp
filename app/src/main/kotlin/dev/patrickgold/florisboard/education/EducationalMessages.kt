@@ -41,6 +41,74 @@ object EducationalMessages {
     const val Corrected = "Corregido"
     const val Editing = "Editando"
 
+    // Experimento
+    const val InvalidAccessCode = "Ese código no sirve. Pídele uno nuevo al investigador."
+    const val TimerLost = "El cronómetro se perdió al reiniciar el teléfono. Cancela la prueba y pide un código nuevo."
+    const val CorrectionDisabledInTask = "La corrección está desactivada en esta tarea."
+    const val ExperimentTitle = "Participar en una prueba"
+    const val ExperimentNoSession =
+        "Para participar en una prueba necesitas iniciar sesión en la app del teclado. " +
+            "Mientras tanto, el teclado y la corrección siguen funcionando como siempre."
+    const val ExperimentBackHome = "Volver al inicio"
+    const val ExperimentCodeIntro = "Escribe el código de 8 caracteres que te dio el investigador."
+    const val ExperimentCodeLabel = "Código de acceso"
+    const val ExperimentValidateCode = "Validar código"
+    const val ExperimentValidating = "Validando el código…"
+    const val ExperimentReadyTitle = "Prueba lista"
+    const val ExperimentReadyIntro = "Lee la consigna con calma. El tiempo se mide desde tu primera tecla."
+    const val ExperimentParticipantLabel = "Participante"
+    const val ExperimentPromptLabel = "Consigna"
+    const val ExperimentConditionLabel = "Modo de esta prueba"
+    const val ConditionAssisted = "Con asistencia de la IA"
+    const val ConditionUnassisted = "Sin asistencia"
+    const val ExperimentStart = "Comenzar tarea"
+    const val ExperimentStarting = "Iniciando la tarea…"
+    const val ExperimentTextLabel = "Tu texto"
+    const val ExperimentElapsedLabel = "Tiempo escribiendo"
+    const val ExperimentElapsedNone = "—"
+    const val ExperimentFinish = "Finalizar y guardar"
+    const val ExperimentSaving = "Guardando tu texto…"
+    const val ExperimentSavingDetail = "No cierres la app."
+    const val ExperimentCancel = "Cancelar prueba"
+    const val ExperimentCancelTitle = "¿Cancelar la prueba?"
+    const val ExperimentCancelIntro = "Elige el motivo. Tu texto no se guardará."
+    const val CancelReasonAbandoned = "Ya no quiero seguir"
+    const val CancelReasonTechnical = "Tuve un problema técnico"
+    const val CancelReasonInterrupted = "Me interrumpieron"
+    const val ExperimentKeepGoing = "Seguir con la prueba"
+    const val ExperimentRetry = "Reintentar"
+    const val ExperimentCloseAction = "Cerrar"
+    const val ExperimentBack = "Volver"
+    const val ExperimentCompleted = "Tarea guardada"
+    const val ExperimentCompletedDetail = "Gracias por participar. Ya puedes cerrar esta pantalla."
+    const val ExperimentCancelled = "Prueba cancelada"
+    const val ExperimentCancelledDetail = "Si quieres volver a intentarlo, pide un código nuevo al investigador."
+    const val ExperimentPrivacy = "Tu texto y el tiempo que tardas se guardan solo para la investigación."
+    const val ExperimentCompletionRejected = "No se pudo enviar tu texto. Revisa que hayas escrito algo e inténtalo de nuevo."
+    const val ExperimentRestoring = "Comprobando tu prueba…"
+    const val ExperimentCancelling = "Cancelando la prueba…"
+    const val ExperimentNotActive = "Esta prueba ya no está activa. Avisa al investigador."
+    const val ExperimentCompletionPending = "No pudimos confirmar que tu texto se guardó. Toca Reintentar."
+    const val ExperimentCompletionConflict = "No pudimos guardar tu texto. Toca Reintentar."
+    const val ExperimentCancelPending = "No pudimos confirmar la cancelación. Toca Reintentar."
+    const val LogoutDuringExperiment =
+        "Tienes una prueba en curso. Si cierras sesión se perderá el texto que no se haya guardado."
+
+    fun conditionLabel(condition: ExperimentCondition): String = when (condition) {
+        ExperimentCondition.ASSISTED -> ConditionAssisted
+        ExperimentCondition.UNASSISTED -> ConditionUnassisted
+    }
+
+    fun cancelReasonLabel(reason: CancelReason): String = when (reason) {
+        CancelReason.ABANDONED -> CancelReasonAbandoned
+        CancelReason.TECHNICAL_PROBLEM -> CancelReasonTechnical
+        CancelReason.INTERRUPTED -> CancelReasonInterrupted
+    }
+
+    fun textCounter(length: Int, max: Int): String = "$length / $max"
+
+    fun elapsedDescription(display: String): String = "$ExperimentElapsedLabel: $display"
+
     // App
     const val AppTitle = "Teclado adaptativo"
     const val LoginIntro = "Inicia sesión para usar la corrección con IA."
@@ -108,6 +176,30 @@ object EducationalMessages {
         else -> if (error.isNetworkFailure()) AiUnavailable else "No se pudo corregir."
     }
 
+    /**
+     * Errores del experimento según la operación: un 400 al canjear es un código inválido, pero
+     * al iniciar/finalizar/cancelar significa que la ejecución ya no está activa (el alumno no
+     * tiene ningún código que corregir).
+     */
+    fun experiment(error: Throwable, op: ExperimentOp): String = when (error) {
+        is EducationalHttpException -> when (error.status) {
+            400 -> when (op) {
+                ExperimentOp.REDEEM -> InvalidAccessCode
+                ExperimentOp.START, ExperimentOp.COMPLETE, ExperimentOp.CANCEL -> ExperimentNotActive
+                ExperimentOp.RESTORE -> "No se pudo continuar con la prueba (código ${error.status})."
+            }
+            401 -> SessionExpired
+            404 -> "Esa prueba ya no está disponible."
+            409 -> ExperimentCompletionConflict
+            else -> "No se pudo continuar con la prueba (código ${error.status})."
+        }
+        else -> if (error.isNetworkFailure()) {
+            "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo."
+        } else {
+            "No se pudo continuar con la prueba."
+        }
+    }
+
     /** Vale la pena ofrecer "Reintentar": IA caída (502) o fallo de red transitorio. */
     fun isRetryable(error: Throwable): Boolean = when (error) {
         is EducationalHttpException -> error.status == 502
@@ -118,3 +210,6 @@ object EducationalMessages {
         this is ConnectException || this is NoRouteToHostException ||
             this is SocketTimeoutException || this is UnknownHostException
 }
+
+/** Operación del experimento que falló; decide el texto de un 400 en [EducationalMessages.experiment]. */
+enum class ExperimentOp { REDEEM, START, COMPLETE, CANCEL, RESTORE }

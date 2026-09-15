@@ -20,6 +20,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -57,6 +58,7 @@ class EducationalApiRepository {
         baseUrl: String,
         token: String,
         text: String,
+        experimentRunId: String? = null,
     ): Result<CorrectionSessionResponse> = withContext(Dispatchers.IO) {
         runCatching {
             val response = request(
@@ -64,9 +66,109 @@ class EducationalApiRepository {
                 path = "/corrections/process",
                 method = "POST",
                 token = token,
-                body = json.encodeToString(ProcessCorrectionRequest(text)),
+                body = json.encodeToString(ProcessCorrectionRequest(text, experimentRunId)),
             )
             json.decodeFromString<CorrectionSessionResponse>(response)
+        }
+    }
+
+    suspend fun redeemExperimentCode(
+        baseUrl: String,
+        token: String,
+        code: String,
+    ): Result<ExperimentRunResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/experiments/access-code/redeem",
+                method = "POST",
+                token = token,
+                body = json.encodeToString(RedeemAccessCodeRequest(code)),
+            )
+            json.decodeFromString<ExperimentRunResponse>(response)
+        }
+    }
+
+    suspend fun startExperiment(
+        baseUrl: String,
+        token: String,
+        runId: String,
+    ): Result<ExperimentRunResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/experiments/runs/$runId/start",
+                method = "POST",
+                token = token,
+                body = null,
+            )
+            json.decodeFromString<ExperimentRunResponse>(response)
+        }
+    }
+
+    /**
+     * Restaura una ejecución vigente (ACTIVE o PENDING) tras reabrir la app. Solo el 404 del
+     * contrato ("No experiment run to restore") significa que no hay nada: `null`. Cualquier otro
+     * 404 (URL mal enrutada, portal cautivo…) es un fallo, para que el marcador conserve el bloqueo.
+     */
+    suspend fun activeExperiment(
+        baseUrl: String,
+        token: String,
+    ): Result<ExperimentRunResponse?> = withContext(Dispatchers.IO) {
+        runCatching {
+            try {
+                val response = request(
+                    baseUrl = baseUrl,
+                    path = "/experiments/runs/active",
+                    method = "GET",
+                    token = token,
+                    body = null,
+                )
+                json.decodeFromString<ExperimentRunResponse>(response)
+            } catch (error: EducationalHttpException) {
+                if (isNoRunToRestore(error)) null else throw error
+            }
+        }
+    }
+
+    suspend fun completeExperiment(
+        baseUrl: String,
+        token: String,
+        runId: String,
+        finalText: String,
+        durationMs: Long,
+        completionKey: String,
+        appVersion: String,
+    ): Result<ExperimentRunResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/experiments/runs/$runId/complete",
+                method = "PATCH",
+                token = token,
+                body = json.encodeToString(
+                    CompleteExperimentRequest(finalText, durationMs, completionKey, appVersion),
+                ),
+            )
+            json.decodeFromString<ExperimentRunResponse>(response)
+        }
+    }
+
+    suspend fun cancelExperiment(
+        baseUrl: String,
+        token: String,
+        runId: String,
+        reason: CancelReason,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            request(
+                baseUrl = baseUrl,
+                path = "/experiments/runs/$runId/cancel",
+                method = "POST",
+                token = token,
+                body = json.encodeToString(CancelExperimentRequest(reason)),
+            )
+            Unit
         }
     }
 
@@ -175,5 +277,20 @@ class EducationalApiRepository {
 
 class EducationalHttpException(
     val status: Int,
-    response: String,
-) : Exception("HTTP $status: ${response.take(160)}")
+    val body: String,
+) : Exception("HTTP $status: ${body.take(160)}")
+
+/** Cuerpo de error del backend: `{"message":"…"}` (otros campos se ignoran). */
+@Serializable
+private data class ApiErrorBody(val message: String? = null)
+
+private val errorBodyJson = Json { ignoreUnknownKeys = true }
+
+/** `GET /runs/active` → 404 con el mensaje exacto del contrato (§3.3): no hay ejecución que restaurar. */
+internal fun isNoRunToRestore(error: EducationalHttpException): Boolean {
+    if (error.status != 404) return false
+    val message = runCatching { errorBodyJson.decodeFromString<ApiErrorBody>(error.body).message }.getOrNull()
+    return message == NoRunToRestoreMessage
+}
+
+private const val NoRunToRestoreMessage = "No experiment run to restore"

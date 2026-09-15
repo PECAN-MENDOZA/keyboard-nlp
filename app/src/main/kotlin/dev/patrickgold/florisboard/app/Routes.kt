@@ -57,6 +57,7 @@ import dev.patrickgold.florisboard.app.settings.advanced.RestoreScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.DictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryType
+import dev.patrickgold.florisboard.app.settings.experiment.ExperimentScreen
 import dev.patrickgold.florisboard.app.settings.accessibility.AccessibilityScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.InputFeedbackScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.KeyboardScreen
@@ -105,6 +106,10 @@ object Routes {
         @Serializable
         @Deeplink("settings/keyboard-settings")
         object KeyboardSettings
+
+        @Serializable
+        @Deeplink("settings/experiment")
+        object Experiment
 
         @Serializable
         @Deeplink("settings/localization")
@@ -245,6 +250,7 @@ object Routes {
 
             composableWithDeepLink(Settings.Home::class) { StudentHomeScreen() }
             composableWithDeepLink(Settings.KeyboardSettings::class) { KeyboardSettingsScreen() }
+            composableWithDeepLink(Settings.Experiment::class) { ExperimentScreen() }
 
             composableWithDeepLink(Settings.Localization::class) { LocalizationScreen() }
             composableWithDeepLink(Settings.SelectLocale::class) { SelectLocaleScreen() }
