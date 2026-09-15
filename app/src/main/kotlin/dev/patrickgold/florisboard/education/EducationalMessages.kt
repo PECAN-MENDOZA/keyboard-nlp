@@ -43,6 +43,7 @@ object EducationalMessages {
 
     // Experimento
     const val InvalidAccessCode = "Ese código no sirve. Pídele uno nuevo al investigador."
+    const val TimerLost = "El cronómetro se perdió al reiniciar el teléfono. Cancela la prueba y pide un código nuevo."
 
     // App
     const val AppTitle = "Teclado adaptativo"

@@ -148,7 +148,7 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.Undo, EducationalMessages.Done,
             EducationalMessages.Close, EducationalMessages.CloseDescription,
             EducationalMessages.AvatarDescription,
-            EducationalMessages.InvalidAccessCode,
+            EducationalMessages.InvalidAccessCode, EducationalMessages.TimerLost,
         ) + networkErrors.map { EducationalMessages.login(it) } +
             networkErrors.map { EducationalMessages.correction(it) } +
             networkErrors.map { EducationalMessages.experiment(it) } +
