@@ -29,6 +29,7 @@ import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.appContext
 import dev.patrickgold.florisboard.clipboardManager
 import dev.patrickgold.florisboard.editorInstance
+import dev.patrickgold.florisboard.education.experimentTypingKey
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.extensionManager
 import dev.patrickgold.florisboard.ime.ImeUiMode
@@ -689,7 +690,11 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
 
     override fun onInputKeyUp(data: KeyData) = activeState.batchEdit {
         val windowController = FlorisImeService.windowControllerOrNull() ?: return@batchEdit
-        if (data.isTypingKey()) educationalCorrectionManager.onUserKeyPress()
+        // Primera pulsación de la escritura controlada: solo en el campo de la tarea (la app del
+        // propio teclado); escribir en otra app no arranca el cronómetro.
+        if (experimentTypingKey(data.code, data.type) && editorInstance.activeInfo.packageName == appContext.packageName) {
+            educationalCorrectionManager.onUserKeyPress()
+        }
         when (data.code) {
             KeyCode.ARROW_DOWN,
             KeyCode.ARROW_LEFT,
@@ -1029,13 +1034,4 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
             )
         }
     }
-}
-
-/**
- * Tecla que escribe en el campo (carácter, número, espacio, Enter, borrar): cuenta como primera
- * pulsación de una escritura controlada. Las teclas de sistema (cambiar vista, ajustes…) no.
- */
-private fun KeyData.isTypingKey(): Boolean = when (code) {
-    KeyCode.DELETE, KeyCode.DELETE_WORD, KeyCode.FORWARD_DELETE, KeyCode.FORWARD_DELETE_WORD, KeyCode.ENTER -> true
-    else -> code >= KeyCode.Spec.CHARACTERS_MIN && (type == KeyType.CHARACTER || type == KeyType.NUMERIC)
 }

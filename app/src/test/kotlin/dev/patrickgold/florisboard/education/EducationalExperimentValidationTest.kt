@@ -16,6 +16,8 @@
 
 package dev.patrickgold.florisboard.education
 
+import dev.patrickgold.florisboard.ime.text.key.KeyCode
+import dev.patrickgold.florisboard.ime.text.key.KeyType
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 
@@ -76,12 +78,13 @@ class EducationalExperimentValidationTest : FunSpec({
     }
 
     context("finish") {
-        test("finish is enabled only with text, while not saving and without a blocking reason") {
+        test("finish is enabled only with text, while not saving, not correcting and without a blocking reason") {
             experimentFinishEnabled(text = "hola", completing = false, blockedReason = null) shouldBe true
             experimentFinishEnabled(text = "   ", completing = false, blockedReason = null) shouldBe false
             experimentFinishEnabled(text = "", completing = false, blockedReason = null) shouldBe false
             experimentFinishEnabled(text = "hola", completing = true, blockedReason = null) shouldBe false
             experimentFinishEnabled(text = "hola", completing = false, blockedReason = EducationalMessages.TimerLost) shouldBe false
+            experimentFinishEnabled(text = "hola", completing = false, blockedReason = null, correcting = true) shouldBe false
         }
         test("the text is capped at the maximum length") {
             limitExperimentText("a".repeat(ExperimentMaxTextLength + 5)).length shouldBe ExperimentMaxTextLength
@@ -127,19 +130,68 @@ class EducationalExperimentValidationTest : FunSpec({
             experimentFailedActions(EducationalExperimentState.Failed(fromMarker, "x", retryable = false)).retryByRestore shouldBe false
             experimentFailedActions(EducationalExperimentState.Failed(run, "x", retryable = true)).retryByRestore shouldBe false
         }
+        test("a failed cancel retries the cancel itself, never a restore") {
+            val fromMarker = run.copy(promptText = "")
+            experimentFailedActions(
+                EducationalExperimentState.Failed(fromMarker, "x", retryable = true, pendingCancel = CancelReason.INTERRUPTED),
+            ) shouldBe ExperimentFailedActions(codeField = false, runCard = false, retry = true, cancel = true, close = false)
+            experimentFailedActions(
+                EducationalExperimentState.Failed(run.copy(status = "ACTIVE"), "x", retryable = true, pendingCancel = CancelReason.INTERRUPTED),
+            ) shouldBe ExperimentFailedActions(codeField = false, runCard = false, retry = true, cancel = true, close = false)
+        }
     }
 
     context("draft") {
-        test("the draft only survives while the run is still writable") {
-            experimentDraftShouldClear(EducationalExperimentState.Idle) shouldBe true
+        test("the draft is cleared only once the run is saved or cancelled, never on a transient Idle or while restoring") {
             experimentDraftShouldClear(EducationalExperimentState.Cancelled) shouldBe true
             experimentDraftShouldClear(EducationalExperimentState.Completed(run)) shouldBe true
+            experimentDraftShouldClear(EducationalExperimentState.Idle) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Restoring(null)) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Restoring(run)) shouldBe false
             experimentDraftShouldClear(EducationalExperimentState.Redeeming) shouldBe false
             experimentDraftShouldClear(EducationalExperimentState.Ready(run)) shouldBe false
             experimentDraftShouldClear(EducationalExperimentState.Starting(run)) shouldBe false
             experimentDraftShouldClear(EducationalExperimentState.Active(run, firstKeyAtMs = null)) shouldBe false
             experimentDraftShouldClear(EducationalExperimentState.Completing(run, "x", 1_000, "k")) shouldBe false
+            experimentDraftShouldClear(EducationalExperimentState.Cancelling(run)) shouldBe false
             experimentDraftShouldClear(EducationalExperimentState.Failed(run, "x", retryable = true)) shouldBe false
+        }
+    }
+
+    context("logout") {
+        test("logout asks for confirmation only while a run or an unconfirmed operation could lose text") {
+            val active = run.copy(status = "ACTIVE")
+            logoutNeedsConfirmation(EducationalExperimentState.Active(active, firstKeyAtMs = null)) shouldBe true
+            logoutNeedsConfirmation(EducationalExperimentState.Completing(active, "x", 1_000, "k")) shouldBe true
+            logoutNeedsConfirmation(EducationalExperimentState.Cancelling(active)) shouldBe true
+            logoutNeedsConfirmation(EducationalExperimentState.Failed(active, "x", retryable = true, pending)) shouldBe true
+            logoutNeedsConfirmation(
+                EducationalExperimentState.Failed(active, "x", retryable = true, pendingCancel = CancelReason.ABANDONED),
+            ) shouldBe true
+            logoutNeedsConfirmation(EducationalExperimentState.Failed(active, "x", retryable = true)) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Failed(null, "x", retryable = false)) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Idle) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Restoring(active)) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Ready(run)) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Completed(run)) shouldBe false
+            logoutNeedsConfirmation(EducationalExperimentState.Cancelled) shouldBe false
+        }
+    }
+
+    context("typing key") {
+        test("characters, numbers, space, enter and the delete keys start the chronometer; system keys do not") {
+            experimentTypingKey(code = 'a'.code, type = KeyType.CHARACTER) shouldBe true
+            experimentTypingKey(code = '7'.code, type = KeyType.NUMERIC) shouldBe true
+            experimentTypingKey(code = KeyCode.SPACE, type = KeyType.CHARACTER) shouldBe true
+            experimentTypingKey(code = KeyCode.ENTER, type = KeyType.ENTER_EDITING) shouldBe true
+            experimentTypingKey(code = KeyCode.DELETE, type = KeyType.ENTER_EDITING) shouldBe true
+            experimentTypingKey(code = KeyCode.DELETE_WORD, type = KeyType.ENTER_EDITING) shouldBe true
+            experimentTypingKey(code = KeyCode.FORWARD_DELETE, type = KeyType.ENTER_EDITING) shouldBe true
+            experimentTypingKey(code = KeyCode.FORWARD_DELETE_WORD, type = KeyType.ENTER_EDITING) shouldBe true
+            experimentTypingKey(code = KeyCode.SHIFT, type = KeyType.MODIFIER) shouldBe false
+            experimentTypingKey(code = KeyCode.VIEW_SYMBOLS, type = KeyType.SYSTEM_GUI) shouldBe false
+            experimentTypingKey(code = KeyCode.SETTINGS, type = KeyType.SYSTEM_GUI) shouldBe false
+            experimentTypingKey(code = 'a'.code, type = KeyType.FUNCTION) shouldBe false
         }
     }
 

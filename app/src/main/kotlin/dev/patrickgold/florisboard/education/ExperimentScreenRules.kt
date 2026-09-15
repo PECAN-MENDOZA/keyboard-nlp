@@ -16,10 +16,14 @@
 
 package dev.patrickgold.florisboard.education
 
+import dev.patrickgold.florisboard.ime.text.key.KeyCode
+import dev.patrickgold.florisboard.ime.text.key.KeyType
+
 /*
  * Reglas puras de la pantalla "Participar en una prueba" (sin Android): qué acepta el campo del
- * código, cuándo se habilita "Finalizar y guardar", cómo se muestra el cronómetro y qué acciones
- * ofrece cada estado [EducationalExperimentState.Failed]. La pantalla Compose solo las compone.
+ * código, cuándo se habilita "Finalizar y guardar", cómo se muestra el cronómetro, qué acciones
+ * ofrece cada estado [EducationalExperimentState.Failed], cuándo "Cerrar sesión" pide confirmar y
+ * qué tecla cuenta como primera pulsación. La pantalla Compose solo las compone.
  */
 
 /** Longitud fija del código de acceso que entrega el investigador. */
@@ -69,21 +73,50 @@ fun formatExperimentElapsed(elapsedMs: Long?): String {
     }
 }
 
-/** "Finalizar y guardar": con texto, sin envío en vuelo y sin motivo de bloqueo (cronómetro perdido). */
-fun experimentFinishEnabled(text: String, completing: Boolean, blockedReason: String?): Boolean =
-    text.isNotBlank() && !completing && blockedReason == null
+/**
+ * "Finalizar y guardar": con texto, sin envío en vuelo, sin motivo de bloqueo (cronómetro perdido)
+ * y sin una corrección IA en curso ([correcting]: su feedback debe llegar antes que la finalización).
+ */
+fun experimentFinishEnabled(
+    text: String,
+    completing: Boolean,
+    blockedReason: String?,
+    correcting: Boolean = false,
+): Boolean = text.isNotBlank() && !completing && blockedReason == null && !correcting
 
 fun limitExperimentText(text: String): String = text.take(ExperimentMaxTextLength)
 
 /**
- * El borrador en disco ([ExperimentDraftStore]) solo tiene sentido mientras hay una ejecución que
- * todavía se puede retomar: sin ejecución, guardada o cancelada ya no hace falta y se limpia.
+ * El borrador en disco ([ExperimentDraftStore]) se limpia solo cuando la ejecución terminó de
+ * verdad (guardada o cancelada). Nunca en `Idle` ni `Restoring`: son el estado transitorio mientras
+ * `GET /runs/active` está en vuelo tras una muerte del proceso, justo cuando el borrador hace
+ * falta. Salir de la pantalla y cerrar sesión limpian explícitamente por su cuenta.
  */
 fun experimentDraftShouldClear(state: EducationalExperimentState): Boolean = when (state) {
-    EducationalExperimentState.Idle,
     is EducationalExperimentState.Completed,
     EducationalExperimentState.Cancelled -> true
     else -> false
+}
+
+/**
+ * "Cerrar sesión" pide confirmación cuando hay texto o una operación que se perdería: ejecución
+ * activa, finalización o cancelación en vuelo, o una fallida pendiente de reintentar.
+ */
+fun logoutNeedsConfirmation(state: EducationalExperimentState): Boolean = when (state) {
+    is EducationalExperimentState.Active,
+    is EducationalExperimentState.Completing,
+    is EducationalExperimentState.Cancelling -> true
+    is EducationalExperimentState.Failed -> state.pendingCompletion != null || state.pendingCancel != null
+    else -> false
+}
+
+/**
+ * Tecla que escribe en el campo (carácter, número, espacio, Enter, borrar): cuenta como primera
+ * pulsación de una escritura controlada. Las teclas de sistema (cambiar vista, ajustes…) no.
+ */
+fun experimentTypingKey(code: Int, type: KeyType): Boolean = when (code) {
+    KeyCode.DELETE, KeyCode.DELETE_WORD, KeyCode.FORWARD_DELETE, KeyCode.FORWARD_DELETE_WORD, KeyCode.ENTER -> true
+    else -> code >= KeyCode.Spec.CHARACTERS_MIN && (type == KeyType.CHARACTER || type == KeyType.NUMERIC)
 }
 
 /**
@@ -117,10 +150,11 @@ fun experimentFailedActions(state: EducationalExperimentState.Failed): Experimen
     val startFailed = pendingRun && run.promptText.isNotBlank()
     return ExperimentFailedActions(
         codeField = false,
-        runCard = startFailed,
+        runCard = startFailed && state.pendingCancel == null,
         retry = state.retryable,
         cancel = true,
         close = false,
-        retryByRestore = state.retryable && pendingRun && !startFailed,
+        // Una cancelación pendiente se reintenta con retry(), nunca restaurando.
+        retryByRestore = state.retryable && pendingRun && !startFailed && state.pendingCancel == null,
     )
 }

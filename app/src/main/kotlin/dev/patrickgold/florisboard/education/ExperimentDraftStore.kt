@@ -24,8 +24,13 @@ package dev.patrickgold.florisboard.education
  * [PrefsExperimentDraftStore].
  */
 interface ExperimentDraftStore {
-    /** Texto guardado para [runId], o `null` si no hay borrador o pertenece a otra ejecución. */
-    fun load(runId: String): String?
-    fun save(runId: String, text: String)
+    /**
+     * Texto guardado para [runId] del alumno [ownerUserId], o `null` si no hay borrador o pertenece
+     * a otra ejecución u otra cuenta.
+     */
+    fun load(runId: String, ownerUserId: String): String?
+    fun save(runId: String, ownerUserId: String, text: String)
+    /** Alumno dueño del borrador guardado, o `null` si no hay borrador. */
+    fun ownerUserId(): String?
     fun clear()
 }

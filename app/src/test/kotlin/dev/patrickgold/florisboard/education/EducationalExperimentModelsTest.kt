@@ -50,6 +50,22 @@ class EducationalExperimentModelsTest : FunSpec({
         json.decodeFromString<CompleteExperimentRequest>(json.encodeToString(body)) shouldBe body
     }
 
+    test("a marker written before owner and pending completion existed still loads") {
+        val lenient = Json { ignoreUnknownKeys = true }
+        lenient.decodeFromString<ExperimentMarker>(
+            """{"runId":"run-1","condition":"UNASSISTED","status":"ACTIVE","firstKeyAtMs":400,"bootId":"7"}""",
+        ) shouldBe ExperimentMarker("run-1", ExperimentCondition.UNASSISTED, "ACTIVE", 400, "7", ownerUserId = "", pendingCompletion = null)
+    }
+
+    test("a marker round-trips its owner and the pending completion payload") {
+        val marker = ExperimentMarker(
+            runId = "run-1", condition = ExperimentCondition.ASSISTED, status = "COMPLETING", firstKeyAtMs = null,
+            bootId = "7", ownerUserId = "student_001",
+            pendingCompletion = PendingCompletionMarker("Texto final", 60_000, "key-1"),
+        )
+        json.decodeFromString<ExperimentMarker>(json.encodeToString(marker)) shouldBe marker
+    }
+
     test("experiment run response decodes the real backend shape") {
         val response = json.decodeFromString<ExperimentRunResponse>(
             """

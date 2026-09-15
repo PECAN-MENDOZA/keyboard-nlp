@@ -22,16 +22,19 @@ import android.content.Context
 class PrefsExperimentDraftStore(context: Context) : ExperimentDraftStore {
     private val prefs = context.getSharedPreferences(PrefsName, Context.MODE_PRIVATE)
 
-    override fun load(runId: String): String? {
+    override fun load(runId: String, ownerUserId: String): String? {
         if (prefs.getString(KeyRunId, null) != runId) return null
+        if (prefs.getString(KeyOwner, null) != ownerUserId) return null
         return prefs.getString(KeyText, null)
     }
 
-    override fun save(runId: String, text: String) {
+    override fun save(runId: String, ownerUserId: String, text: String) {
         // apply(): perder la última tecla si el proceso muere justo después es aceptable; commit()
         // en cada pulsación bloquearía el hilo principal.
-        prefs.edit().putString(KeyRunId, runId).putString(KeyText, text).apply()
+        prefs.edit().putString(KeyRunId, runId).putString(KeyOwner, ownerUserId).putString(KeyText, text).apply()
     }
+
+    override fun ownerUserId(): String? = prefs.getString(KeyOwner, null)
 
     override fun clear() {
         prefs.edit().clear().apply()
@@ -40,6 +43,7 @@ class PrefsExperimentDraftStore(context: Context) : ExperimentDraftStore {
     companion object {
         private const val PrefsName = "experiment_draft"
         private const val KeyRunId = "run_id"
+        private const val KeyOwner = "owner_user_id"
         private const val KeyText = "text"
     }
 }

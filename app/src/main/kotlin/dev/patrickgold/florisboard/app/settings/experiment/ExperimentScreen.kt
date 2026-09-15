@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,6 +71,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.app.LocalNavController
 import dev.patrickgold.florisboard.education.CancelReason
+import dev.patrickgold.florisboard.education.EducationalCorrectionState
 import dev.patrickgold.florisboard.education.EducationalExperimentState
 import dev.patrickgold.florisboard.education.EducationalMessages
 import dev.patrickgold.florisboard.education.ExperimentCodeLength
@@ -88,13 +90,15 @@ import dev.patrickgold.florisboard.education.limitExperimentText
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * "Participar en una prueba": escritura controlada supervisada por el investigador. La pantalla
  * solo refleja [EducationalExperimentState] del coordinador; condición y consigna llegan del
- * backend y nunca se eligen aquí. Fases: sin sesión → código → prueba lista → tarea (texto,
- * cronómetro, finalizar/cancelar) → guardando → fallo (reintentar/cancelar/cerrar) → guardada o
- * cancelada. Toda la lógica decidible sin Android vive en `education/ExperimentScreenRules.kt`.
+ * backend y nunca se eligen aquí. Fases: sin sesión → comprobando (restauración en vuelo) →
+ * código → prueba lista → tarea (texto, cronómetro, finalizar/cancelar) → guardando o cancelando
+ * → fallo (reintentar/cancelar/cerrar) → guardada o cancelada. Toda la lógica decidible sin
+ * Android vive en `education/ExperimentScreenRules.kt`.
  */
 @Composable
 fun ExperimentScreen() = FlorisScreen {
@@ -107,10 +111,13 @@ fun ExperimentScreen() = FlorisScreen {
     content {
         val manager by context.educationalCorrectionManager()
         val session by manager.session.collectAsState()
-        val hasSession = session?.takeUnless { it.isExpired() } != null
+        val activeSession = session?.takeUnless { it.isExpired() }
+        val hasSession = activeSession != null
         val experiment = manager.experiment
         val state by experiment.state.collectAsState()
+        val correctionState by manager.state.collectAsState()
         val draftStore = remember { PrefsExperimentDraftStore(context) }
+        val screenScope = rememberCoroutineScope()
 
         // Una sola restauración por instancia de la pantalla (la rotación no la repite): una
         // ejecución PENDING/ACTIVE vuelve a aparecer. Una prueba recién guardada o cancelada se
@@ -125,22 +132,25 @@ fun ExperimentScreen() = FlorisScreen {
             }
         }
 
-        // El borrador en disco ya no hace falta en cuanto la ejecución deja de ser retomable
-        // (guardada, cancelada o inexistente); ver `experimentDraftShouldClear`.
+        // El borrador en disco ya no hace falta en cuanto la ejecución terminó (guardada o
+        // cancelada); nunca en el Idle/Restoring transitorio de una restauración en vuelo.
         LaunchedEffect(state) {
             if (experimentDraftShouldClear(state)) draftStore.clear()
         }
 
-        if (!hasSession) {
+        if (activeSession == null) {
             NoSessionPhase(onBack = { navController.popBackStack() })
             return@content
         }
 
+        val ownerUserId = activeSession.userId
         val runId = state.runOrNull()?.id
         var code by rememberSaveable { mutableStateOf("") }
         // El texto sobrevive a la rotación (rememberSaveable) y a que Android mate el proceso
-        // (borrador en disco por ejecución, PrefsExperimentDraftStore).
-        var text by rememberSaveable(runId) { mutableStateOf(runId?.let(draftStore::load) ?: "") }
+        // (borrador en disco por ejecución y alumno, PrefsExperimentDraftStore).
+        var text by rememberSaveable(runId) {
+            mutableStateOf(limitExperimentText(runId?.let { draftStore.load(it, ownerUserId) } ?: ""))
+        }
         var cancelDialogOpen by rememberSaveable { mutableStateOf(false) }
         var cancelReason by rememberSaveable { mutableStateOf(CancelReason.ABANDONED.name) }
         var completionRejected by rememberSaveable { mutableStateOf(false) }
@@ -162,6 +172,7 @@ fun ExperimentScreen() = FlorisScreen {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             when (val current = state) {
+                is EducationalExperimentState.Restoring -> RestoringPhase()
                 is EducationalExperimentState.Idle,
                 is EducationalExperimentState.Redeeming -> CodeEntryPhase(
                     code = code,
@@ -195,14 +206,23 @@ fun ExperimentScreen() = FlorisScreen {
                         if (limited.isNotEmpty()) experiment.markFirstKey()
                         text = limited
                         completionRejected = false
-                        draftStore.save(current.run.id, limited)
+                        draftStore.save(current.run.id, ownerUserId, limited)
                     },
                     blockedReason = blockedReason,
                     completionRejected = completionRejected,
-                    onFinish = { if (!experiment.complete(text)) completionRejected = true },
+                    correcting = correctionState is EducationalCorrectionState.Processing,
+                    // El manager cierra la sugerencia abierta y espera su feedback antes de finalizar.
+                    onFinish = {
+                        val finalText = text
+                        screenScope.launch {
+                            if (!manager.completeExperiment(finalText)) completionRejected = true
+                        }
+                    },
                     onCancel = openCancelDialog,
                 )
                 is EducationalExperimentState.Completing -> CompletingPhase(run = current.run, text = current.text)
+                is EducationalExperimentState.Cancelling ->
+                    CancellingPhase(run = current.run, text = current.pendingCompletion?.text ?: text)
                 is EducationalExperimentState.Failed -> FailedPhase(
                     state = current,
                     code = code,
@@ -253,6 +273,12 @@ private fun NoSessionPhase(onBack: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         PrimaryAction(text = EducationalMessages.ExperimentBackHome, onClick = onBack)
     }
+}
+
+/** `GET /runs/active` en vuelo: ni el campo del código ni la tarea hasta saber qué hay. */
+@Composable
+private fun RestoringPhase() {
+    ProgressRow(EducationalMessages.ExperimentRestoring)
 }
 
 @Composable
@@ -352,6 +378,7 @@ private fun ActivePhase(
     onTextChange: (String) -> Unit,
     blockedReason: String?,
     completionRejected: Boolean,
+    correcting: Boolean,
     onFinish: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -408,7 +435,7 @@ private fun ActivePhase(
         PrimaryAction(
             text = EducationalMessages.ExperimentFinish,
             onClick = onFinish,
-            enabled = experimentFinishEnabled(text, completing = false, blockedReason = null),
+            enabled = experimentFinishEnabled(text, completing = false, blockedReason = null, correcting = correcting),
         )
         Spacer(Modifier.height(8.dp))
     }
@@ -431,6 +458,22 @@ private fun CompletingPhase(run: ExperimentRunResponse, text: String) {
     Text(EducationalMessages.ExperimentSavingDetail, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
     PrimaryAction(text = EducationalMessages.ExperimentFinish, onClick = {}, enabled = false)
+}
+
+/** `POST …/cancel` en vuelo: el texto se ve, nada se puede tocar hasta que el backend confirme. */
+@Composable
+private fun CancellingPhase(run: ExperimentRunResponse, text: String) {
+    if (run.promptText.isNotBlank()) {
+        PromptCard(run)
+        Spacer(Modifier.height(12.dp))
+    }
+    if (text.isNotBlank()) {
+        KeptTextField(text)
+        Spacer(Modifier.height(12.dp))
+    }
+    ProgressRow(EducationalMessages.ExperimentCancelling)
+    Spacer(Modifier.height(12.dp))
+    SecondaryAction(text = EducationalMessages.ExperimentCancel, onClick = {}, enabled = false)
 }
 
 @Composable
@@ -675,10 +718,12 @@ private fun CancelDialog(
 // --- Helpers -----------------------------------------------------------------------------------
 
 private fun EducationalExperimentState.runOrNull(): ExperimentRunResponse? = when (this) {
+    is EducationalExperimentState.Restoring -> known
     is EducationalExperimentState.Ready -> run
     is EducationalExperimentState.Starting -> run
     is EducationalExperimentState.Active -> run
     is EducationalExperimentState.Completing -> run
+    is EducationalExperimentState.Cancelling -> run
     is EducationalExperimentState.Failed -> run
     is EducationalExperimentState.Completed -> run
     EducationalExperimentState.Idle,

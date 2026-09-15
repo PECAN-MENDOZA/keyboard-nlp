@@ -85,6 +85,13 @@ object EducationalMessages {
     const val ExperimentCancelledDetail = "Si quieres volver a intentarlo, pide un código nuevo al investigador."
     const val ExperimentPrivacy = "Tu texto y el tiempo que tardas se guardan solo para la investigación."
     const val ExperimentCompletionRejected = "No se pudo enviar tu texto. Revisa que hayas escrito algo e inténtalo de nuevo."
+    const val ExperimentRestoring = "Comprobando tu prueba…"
+    const val ExperimentCancelling = "Cancelando la prueba…"
+    const val ExperimentNotActive = "Esta prueba ya no está activa. Avisa al investigador."
+    const val ExperimentCompletionPending = "No pudimos confirmar que tu texto se guardó. Toca Reintentar."
+    const val ExperimentCompletionConflict = "No pudimos guardar tu texto. Toca Reintentar."
+    const val LogoutDuringExperiment =
+        "Tienes una prueba en curso. Si cierras sesión se perderá el texto que no se haya guardado."
 
     fun conditionLabel(condition: ExperimentCondition): String = when (condition) {
         ExperimentCondition.ASSISTED -> ConditionAssisted
@@ -168,12 +175,21 @@ object EducationalMessages {
         else -> if (error.isNetworkFailure()) AiUnavailable else "No se pudo corregir."
     }
 
-    fun experiment(error: Throwable): String = when (error) {
+    /**
+     * Errores del experimento según la operación: un 400 al canjear es un código inválido, pero
+     * al iniciar/finalizar/cancelar significa que la ejecución ya no está activa (el alumno no
+     * tiene ningún código que corregir).
+     */
+    fun experiment(error: Throwable, op: ExperimentOp): String = when (error) {
         is EducationalHttpException -> when (error.status) {
-            400 -> InvalidAccessCode
+            400 -> when (op) {
+                ExperimentOp.REDEEM -> InvalidAccessCode
+                ExperimentOp.START, ExperimentOp.COMPLETE, ExperimentOp.CANCEL -> ExperimentNotActive
+                ExperimentOp.RESTORE -> "No se pudo continuar con la prueba (código ${error.status})."
+            }
             401 -> SessionExpired
             404 -> "Esa prueba ya no está disponible."
-            409 -> "Esa prueba ya fue guardada."
+            409 -> ExperimentCompletionConflict
             else -> "No se pudo continuar con la prueba (código ${error.status})."
         }
         else -> if (error.isNetworkFailure()) {
@@ -193,3 +209,6 @@ object EducationalMessages {
         this is ConnectException || this is NoRouteToHostException ||
             this is SocketTimeoutException || this is UnknownHostException
 }
+
+/** Operación del experimento que falló; decide el texto de un 400 en [EducationalMessages.experiment]. */
+enum class ExperimentOp { REDEEM, START, COMPLETE, CANCEL, RESTORE }

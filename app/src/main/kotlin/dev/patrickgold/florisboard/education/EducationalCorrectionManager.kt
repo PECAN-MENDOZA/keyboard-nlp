@@ -32,8 +32,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 class EducationalCorrectionManager(context: Context) {
     private val appContext: Context = context.applicationContext
@@ -45,7 +43,9 @@ class EducationalCorrectionManager(context: Context) {
     private val prefs by FlorisPreferenceStore
     private var lastPrewarmAtMs: Long = 0L
     private var autoDismissJob: Job? = null
-    private val feedbackMutex = Mutex()
+    // Envíos de feedback en orden; `completeExperiment` los drena antes de finalizar.
+    private val feedbackQueue = FeedbackQueue(scope)
+    private val draftStore = PrefsExperimentDraftStore(appContext)
 
     private val _state = MutableStateFlow<EducationalCorrectionState>(EducationalCorrectionState.Idle)
     val state: StateFlow<EducationalCorrectionState> = _state
@@ -69,7 +69,11 @@ class EducationalCorrectionManager(context: Context) {
         },
         onSuccess = { newSession ->
             persistSession(newSession)
-            // Una ejecución pendiente (o una finalización que falló por sesión vencida) sigue ahí.
+            // Otra cuenta en el mismo teléfono: el borrador de la anterior no es de este alumno (el
+            // marcador lo descarta el propio restore()). La ejecución anterior sigue en el backend.
+            if (draftStore.ownerUserId() != newSession.userId) draftStore.clear()
+            // Con la misma cuenta, una ejecución pendiente (o una finalización que falló por
+            // sesión vencida) sigue ahí.
             experiment.restore()
         },
     )
@@ -79,7 +83,9 @@ class EducationalCorrectionManager(context: Context) {
      * Escritura controlada (experimento). Sin ejecución activa la corrección funciona como siempre;
      * en `UNASSISTED` [requestCorrection] avisa y no llama al backend; en `ASSISTED` la corrección
      * lleva `id_ejecucion`. Sobrevive a una sesión vencida (la finalización pendiente se reenvía
-     * tras volver a entrar); solo [logout] lo borra.
+     * tras volver a entrar); solo [logout] o el login de otra cuenta lo borran. Un 401 del backend
+     * cierra la sesión local (no el coordinador): el inicio muestra el login y, al entrar, se
+     * reanuda con el mismo payload.
      */
     val experiment = EducationalExperimentCoordinator(
         scope = scope,
@@ -89,6 +95,7 @@ class EducationalCorrectionManager(context: Context) {
         appVersion = BuildConfig.VERSION_NAME,
         store = PrefsExperimentMarkerStore(appContext),
         bootId = { PrefsExperimentMarkerStore.bootId(appContext) },
+        onSessionRejected = { clearSession() },
     )
 
     init {
@@ -128,7 +135,7 @@ class EducationalCorrectionManager(context: Context) {
         clearSession()
         loginFlow.reset()
         experiment.clear()
-        PrefsExperimentDraftStore(appContext).clear()
+        draftStore.clear()
         reset()
         _connectionState.value = EducationalBackendConnectionState.Unknown
     }
@@ -193,6 +200,23 @@ class EducationalCorrectionManager(context: Context) {
      */
     fun onUserKeyPress() {
         if (experiment.state.value is EducationalExperimentState.Active) experiment.markFirstKey()
+    }
+
+    /**
+     * "Finalizar y guardar": cierra la sugerencia que siga abierta (su feedback se encola), espera
+     * a que TODO el feedback pendiente llegue al backend y solo entonces envía la finalización.
+     * El backend cierra el feedback al completar, así que el orden feedback → complete es lo
+     * que fija la aceptación registrada. Devuelve lo que devuelve [EducationalExperimentCoordinator.complete].
+     */
+    suspend fun completeExperiment(text: String): Boolean {
+        when (_state.value) {
+            is EducationalCorrectionState.EditingInPlace -> finishEdit()
+            is EducationalCorrectionState.ShowingSuggestions,
+            is EducationalCorrectionState.Applied -> dismiss()
+            else -> Unit
+        }
+        feedbackQueue.drain()
+        return experiment.complete(text)
     }
 
     // ---- Solicitud ------------------------------------------------------------------------
@@ -442,22 +466,20 @@ class EducationalCorrectionManager(context: Context) {
         finalText: String? = null,
         reason: String? = null,
     ) {
-        // Mutex FIFO: los envíos se completan en el orden en que se lanzaron (p. ej. aceptar
-        // antes que UNDO), aunque la primera petición sea lenta.
-        scope.launch {
-            feedbackMutex.withLock {
-                val session = currentSession() ?: return@launch
-                EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
-                    repository.sendFeedback(
-                        baseUrl = baseUrl,
-                        token = session.token,
-                        sessionId = response.sessionId,
-                        selectedSuggestion = selectedSuggestion,
-                        accepted = accepted,
-                        finalText = finalText,
-                        reason = reason,
-                    )
-                }
+        // Cola FIFO: los envíos se completan en el orden en que se lanzaron (p. ej. aceptar
+        // antes que UNDO), aunque la primera petición sea lenta; ver FeedbackQueue.
+        feedbackQueue.enqueue {
+            val session = currentSession() ?: return@enqueue
+            EducationalBackendBaseUrls.firstSuccessful { baseUrl ->
+                repository.sendFeedback(
+                    baseUrl = baseUrl,
+                    token = session.token,
+                    sessionId = response.sessionId,
+                    selectedSuggestion = selectedSuggestion,
+                    accepted = accepted,
+                    finalText = finalText,
+                    reason = reason,
+                )
             }
         }
     }

@@ -20,6 +20,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
@@ -105,7 +106,11 @@ class EducationalApiRepository {
         }
     }
 
-    /** Restaura una ejecución vigente (ACTIVE o PENDING) tras reabrir la app. Sin nada que restaurar: `null`. */
+    /**
+     * Restaura una ejecución vigente (ACTIVE o PENDING) tras reabrir la app. Solo el 404 del
+     * contrato ("No experiment run to restore") significa que no hay nada: `null`. Cualquier otro
+     * 404 (URL mal enrutada, portal cautivo…) es un fallo, para que el marcador conserve el bloqueo.
+     */
     suspend fun activeExperiment(
         baseUrl: String,
         token: String,
@@ -121,7 +126,7 @@ class EducationalApiRepository {
                 )
                 json.decodeFromString<ExperimentRunResponse>(response)
             } catch (error: EducationalHttpException) {
-                if (error.status == 404) null else throw error
+                if (isNoRunToRestore(error)) null else throw error
             }
         }
     }
@@ -272,5 +277,20 @@ class EducationalApiRepository {
 
 class EducationalHttpException(
     val status: Int,
-    response: String,
-) : Exception("HTTP $status: ${response.take(160)}")
+    val body: String,
+) : Exception("HTTP $status: ${body.take(160)}")
+
+/** Cuerpo de error del backend: `{"message":"…"}` (otros campos se ignoran). */
+@Serializable
+private data class ApiErrorBody(val message: String? = null)
+
+private val errorBodyJson = Json { ignoreUnknownKeys = true }
+
+/** `GET /runs/active` → 404 con el mensaje exacto del contrato (§3.3): no hay ejecución que restaurar. */
+internal fun isNoRunToRestore(error: EducationalHttpException): Boolean {
+    if (error.status != 404) return false
+    val message = runCatching { errorBodyJson.decodeFromString<ApiErrorBody>(error.body).message }.getOrNull()
+    return message == NoRunToRestoreMessage
+}
+
+private const val NoRunToRestoreMessage = "No experiment run to restore"

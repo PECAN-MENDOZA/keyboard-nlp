@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -39,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -62,6 +64,7 @@ import dev.patrickgold.florisboard.app.Routes
 import dev.patrickgold.florisboard.education.EducationalBackendConnectionState
 import dev.patrickgold.florisboard.education.EducationalMessages
 import dev.patrickgold.florisboard.education.LoginState
+import dev.patrickgold.florisboard.education.logoutNeedsConfirmation
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.florisboard.lib.util.InputMethodUtils
@@ -72,7 +75,8 @@ import org.florisboard.lib.compose.stringRes
 
 /**
  * Inicio de la app: la cuenta del alumno. Sin sesión muestra el login; con sesión muestra el
- * saludo, la conexión y cómo corregir. El formulario nunca se ve con una sesión activa.
+ * saludo, la conexión y cómo corregir. El formulario nunca se ve con una sesión activa. "Cerrar
+ * sesión" pide confirmación si hay una prueba en curso: borra el texto no guardado.
  */
 @Composable
 fun StudentHomeScreen() = FlorisScreen {
@@ -127,16 +131,47 @@ fun StudentHomeScreen() = FlorisScreen {
         )
 
         if (activeSession != null) {
+            val experimentState by manager.experiment.state.collectAsState()
+            var confirmLogout by remember { mutableStateOf(false) }
             OutlinedButton(
-                onClick = manager::logout,
+                onClick = { if (logoutNeedsConfirmation(experimentState)) confirmLogout = true else manager.logout() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),
             ) {
                 Text(EducationalMessages.Logout)
             }
+            if (confirmLogout) {
+                LogoutConfirmDialog(
+                    onConfirm = {
+                        confirmLogout = false
+                        manager.logout()
+                    },
+                    onDismiss = { confirmLogout = false },
+                )
+            }
         }
     }
+}
+
+/** Hay una prueba en curso: cerrar sesión borra el texto que no se haya guardado. */
+@Composable
+private fun LogoutConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(EducationalMessages.Logout) },
+        text = { Text(EducationalMessages.LogoutDuringExperiment) },
+        confirmButton = {
+            TextButton(onClick = onConfirm, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(EducationalMessages.Logout)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text(EducationalMessages.ExperimentBack)
+            }
+        },
+    )
 }
 
 @Composable

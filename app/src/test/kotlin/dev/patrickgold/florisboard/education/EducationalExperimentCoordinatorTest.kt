@@ -2,6 +2,7 @@ package dev.patrickgold.florisboard.education
 
 import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import java.net.SocketTimeoutException
 import java.util.concurrent.CountDownLatch
@@ -39,7 +40,16 @@ class EducationalExperimentCoordinatorTest : FunSpec({
         firstKeyAtMs: Long? = null,
         bootId: String = "boot-1",
         runId: String = "run-1",
-    ) = ExperimentMarker(runId, condition, status, firstKeyAtMs, bootId)
+        ownerUserId: String = "student_001",
+        pendingCompletion: PendingCompletionMarker? = null,
+    ) = ExperimentMarker(runId, condition, status, firstKeyAtMs, bootId, ownerUserId, pendingCompletion)
+
+    /** Ejecución mínima reconstruida desde el marcador (sin consigna ni participante). */
+    fun markerRun(condition: ExperimentCondition = ExperimentCondition.ASSISTED, status: String = "ACTIVE") =
+        ExperimentRunResponse(
+            id = "run-1", participantCode = "", condition = condition,
+            taskVariant = "", promptText = "", status = status,
+        )
 
     class FakeElapsedClock(var value: Long) {
         fun now(): Long = value
@@ -76,16 +86,20 @@ class EducationalExperimentCoordinatorTest : FunSpec({
         var failFirstCompletion: Boolean = false,
         var completeGate: CompletableDeferred<Result<ExperimentRunResponse>>? = null,
         var cancelResult: Result<Unit> = Result.success(Unit),
+        var activeGate: CompletableDeferred<Result<ExperimentRunResponse?>>? = null,
+        var cancelGate: CompletableDeferred<Result<Unit>>? = null,
     ) : EducationalExperimentApi {
         val redeemedCodes = mutableListOf<String>()
         val startedRunIds = mutableListOf<String>()
         var activeCalls = 0
+        val activeTokens = mutableListOf<String>()
         val sent = mutableListOf<SentCompletion>()
         val completionKeys get() = sent.map { it.completionKey }
         val lastDurationMs get() = sent.lastOrNull()?.durationMs
         val lastFinalText get() = sent.lastOrNull()?.text
         val lastAppVersion get() = sent.lastOrNull()?.appVersion
         val cancelReasons = mutableListOf<CancelReason>()
+        val cancelledRunIds = mutableListOf<String>()
 
         override suspend fun redeem(token: String, code: String): Result<ExperimentRunResponse> {
             redeemedCodes += code
@@ -99,6 +113,8 @@ class EducationalExperimentCoordinatorTest : FunSpec({
 
         override suspend fun active(token: String): Result<ExperimentRunResponse?> {
             activeCalls++
+            activeTokens += token
+            activeGate?.let { return it.await() }
             return activeResult ?: Result.success(activeRun)
         }
 
@@ -121,6 +137,8 @@ class EducationalExperimentCoordinatorTest : FunSpec({
 
         override suspend fun cancel(token: String, runId: String, reason: CancelReason): Result<Unit> {
             cancelReasons += reason
+            cancelledRunIds += runId
+            cancelGate?.let { return it.await() }
             return cancelResult
         }
     }
@@ -131,6 +149,7 @@ class EducationalExperimentCoordinatorTest : FunSpec({
         store: FakeMarkerStore = FakeMarkerStore(),
         bootId: String = "boot-1",
         currentSession: () -> EducationalSession? = { session },
+        onSessionRejected: () -> Unit = {},
     ) = EducationalExperimentCoordinator(
         scope = this,
         api = api,
@@ -139,6 +158,7 @@ class EducationalExperimentCoordinatorTest : FunSpec({
         appVersion = "1.2.3",
         store = store,
         bootId = { bootId },
+        onSessionRejected = onSessionRejected,
     )
 
     /** Coordinator that redeemed and started an ACTIVE run of [condition], ready for the student to type. */
@@ -147,10 +167,11 @@ class EducationalExperimentCoordinatorTest : FunSpec({
         api: FakeExperimentApi = FakeExperimentApi(),
         clock: FakeElapsedClock = FakeElapsedClock(1_000),
         store: FakeMarkerStore = FakeMarkerStore(),
+        onSessionRejected: () -> Unit = {},
         currentSession: () -> EducationalSession? = { session },
     ): EducationalExperimentCoordinator {
         if (api.startResult == null) api.startResult = Result.success(run(condition))
-        val coordinator = coordinator(api, clock, store, currentSession = currentSession)
+        val coordinator = coordinator(api, clock, store, currentSession = currentSession, onSessionRejected = onSessionRejected)
         coordinator.redeem("ABCDEFGH")
         advanceUntilIdle()
         coordinator.start()
@@ -259,9 +280,43 @@ class EducationalExperimentCoordinatorTest : FunSpec({
             }
         }
 
-        test("a 409 closes the run locally so corrections work again and nothing is resent") {
+        test("a 409 is a key collision, not a closed run: the gate stays closed and Reintentar resends with a new key only") {
             runTest {
-                val api = FakeExperimentApi(completeResult = Result.failure(EducationalHttpException(409, "done")))
+                val api = FakeExperimentApi(completeResult = Result.failure(EducationalHttpException(409, "conflict")))
+                val clock = FakeElapsedClock(1_000)
+                val store = FakeMarkerStore()
+                val coordinator = readyCoordinator(ExperimentCondition.UNASSISTED, api, clock, store)
+                coordinator.markFirstKey()
+                clock.value = 2_000
+                coordinator.complete("Texto final")
+                advanceUntilIdle()
+                val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
+                failed.run?.status shouldBe "ACTIVE"
+                failed.retryable shouldBe true
+                failed.message shouldBe EducationalMessages.ExperimentCompletionConflict
+                val renewed = failed.pendingCompletion.shouldBeInstanceOf<PendingCompletion>()
+                renewed.text shouldBe "Texto final"
+                renewed.durationMs shouldBe 1_000
+                renewed.completionKey shouldNotBe api.completionKeys.single()
+                coordinator.activeRunId() shouldBe null
+                coordinator.correctionAllowed() shouldBe false
+                store.marker?.pendingCompletion shouldBe PendingCompletionMarker("Texto final", 1_000, renewed.completionKey)
+
+                api.completeResult = null
+                coordinator.retry()
+                advanceUntilIdle()
+                api.sent.size shouldBe 2
+                api.sent[1].completionKey shouldBe renewed.completionKey
+                api.sent[1].text shouldBe "Texto final"
+                api.sent[1].durationMs shouldBe 1_000
+                coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Completed>()
+                store.marker shouldBe null
+            }
+        }
+
+        test("a terminal 400 on complete closes the run locally so corrections work again and nothing is resent") {
+            runTest {
+                val api = FakeExperimentApi(completeResult = Result.failure(EducationalHttpException(400, "Run is not active")))
                 val clock = FakeElapsedClock(1_000)
                 val coordinator = readyCoordinator(ExperimentCondition.UNASSISTED, api, clock)
                 coordinator.markFirstKey()
@@ -271,6 +326,7 @@ class EducationalExperimentCoordinatorTest : FunSpec({
                 val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
                 failed.run?.status shouldBe "CLOSED"
                 failed.retryable shouldBe false
+                failed.message shouldBe EducationalMessages.ExperimentNotActive
                 failed.pendingCompletion?.text shouldBe "Texto final"
                 coordinator.activeRunId() shouldBe null
                 coordinator.correctionAllowed() shouldBe true
@@ -285,7 +341,9 @@ class EducationalExperimentCoordinatorTest : FunSpec({
             runTest {
                 val api = FakeExperimentApi(completeResult = Result.failure(EducationalHttpException(401, "expired")))
                 val clock = FakeElapsedClock(1_000)
-                val coordinator = readyCoordinator(ExperimentCondition.ASSISTED, api, clock)
+                val store = FakeMarkerStore()
+                var rejections = 0
+                val coordinator = readyCoordinator(ExperimentCondition.ASSISTED, api, clock, store, onSessionRejected = { rejections++ })
                 coordinator.markFirstKey()
                 clock.value = 2_000
                 coordinator.complete("Texto final")
@@ -294,14 +352,38 @@ class EducationalExperimentCoordinatorTest : FunSpec({
                 failed.run?.status shouldBe "ACTIVE"
                 failed.message shouldBe EducationalMessages.SessionExpired
                 failed.retryable shouldBe true
+                failed.pendingCompletion?.text shouldBe "Texto final"
+                rejections shouldBe 1
+                store.marker?.pendingCompletion?.completionKey shouldBe api.completionKeys.single()
                 coordinator.activeRunId() shouldBe null
                 coordinator.correctionAllowed() shouldBe false
+
+                // Volver a entrar con la misma cuenta: restore() no toca la finalización pendiente.
+                coordinator.restore()
+                advanceUntilIdle()
+                api.activeCalls shouldBe 0
+                coordinator.state.value shouldBe failed
 
                 api.completeResult = null
                 coordinator.retry()
                 advanceUntilIdle()
                 api.completionKeys.distinct().size shouldBe 1
+                rejections shouldBe 1
                 coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Completed>()
+            }
+        }
+
+        test("a 401 on any other experiment call is reported once as well") {
+            runTest {
+                var rejections = 0
+                val api = FakeExperimentApi(startResult = Result.failure(EducationalHttpException(401, "expired")))
+                val coordinator = coordinator(api, onSessionRejected = { rejections++ })
+                coordinator.redeem("ABCDEFGH")
+                advanceUntilIdle()
+                coordinator.start()
+                advanceUntilIdle()
+                coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>().message shouldBe EducationalMessages.SessionExpired
+                rejections shouldBe 1
             }
         }
 
@@ -374,7 +456,7 @@ class EducationalExperimentCoordinatorTest : FunSpec({
                 coordinator.redeem("ABCDEFGH")
                 advanceUntilIdle()
                 val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
-                failed.message shouldBe EducationalMessages.experiment(SocketTimeoutException("timeout"))
+                failed.message shouldBe EducationalMessages.experiment(SocketTimeoutException("timeout"), ExperimentOp.REDEEM)
                 failed.retryable shouldBe true
             }
         }
@@ -611,7 +693,7 @@ class EducationalExperimentCoordinatorTest : FunSpec({
                 advanceUntilIdle()
                 val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
                 failed.run shouldBe run(ExperimentCondition.UNASSISTED)
-                failed.message shouldBe EducationalMessages.experiment(SocketTimeoutException("timeout"))
+                failed.message shouldBe EducationalMessages.experiment(SocketTimeoutException("timeout"), ExperimentOp.COMPLETE)
                 failed.retryable shouldBe true
                 failed.pendingCompletion shouldBe
                     PendingCompletion("Texto final", 60_000, api.completionKeys.single())
@@ -626,17 +708,75 @@ class EducationalExperimentCoordinatorTest : FunSpec({
 
         test("a terminal backend answer is not retryable but the text is still kept") {
             runTest {
-                val api = FakeExperimentApi(completeResult = Result.failure(EducationalHttpException(409, "done")))
+                val api = FakeExperimentApi(completeResult = Result.failure(EducationalHttpException(404, "gone")))
                 val clock = FakeElapsedClock(1_000)
-                val coordinator = readyCoordinator(api = api, clock = clock)
+                val store = FakeMarkerStore()
+                val coordinator = readyCoordinator(api = api, clock = clock, store = store)
                 coordinator.markFirstKey()
                 clock.value = 2_000
                 coordinator.complete("Texto final")
                 advanceUntilIdle()
                 val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
-                failed.message shouldBe EducationalMessages.experiment(EducationalHttpException(409, "done"))
+                failed.message shouldBe EducationalMessages.experiment(EducationalHttpException(404, "gone"), ExperimentOp.COMPLETE)
                 failed.retryable shouldBe false
                 failed.pendingCompletion?.text shouldBe "Texto final"
+                store.marker shouldBe null
+            }
+        }
+
+        test("the pending completion is persisted before the request and survives recreating the coordinator") {
+            runTest {
+                val clock = FakeElapsedClock(1_000)
+                val store = FakeMarkerStore()
+                val first = readyCoordinator(api = FakeExperimentApi(failFirstCompletion = true), clock = clock, store = store)
+                first.markFirstKey()
+                clock.value = 61_000
+                first.complete("Texto final") shouldBe true
+                advanceUntilIdle()
+                val failed = first.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
+                val pending = failed.pendingCompletion.shouldBeInstanceOf<PendingCompletion>()
+                store.marker shouldBe marker(
+                    status = "COMPLETING",
+                    pendingCompletion = PendingCompletionMarker("Texto final", 60_000, pending.completionKey),
+                )
+
+                // Muerte del proceso: nuevo coordinador, mismo marcador, sin red antes de decidir.
+                val api = FakeExperimentApi(activeRun = run(ExperimentCondition.ASSISTED))
+                clock.value = 999_999
+                val second = coordinator(api, clock, store)
+                second.restore()
+                advanceUntilIdle()
+                api.activeCalls shouldBe 0
+                second.state.value shouldBe EducationalExperimentState.Failed(
+                    markerRun(),
+                    EducationalMessages.ExperimentCompletionPending,
+                    retryable = true,
+                    pendingCompletion = PendingCompletion("Texto final", 60_000, pending.completionKey),
+                )
+                second.correctionAllowed() shouldBe false
+                second.activeRunId() shouldBe null
+
+                second.retry()
+                advanceUntilIdle()
+                api.sent shouldBe listOf(SentCompletion("run-1", "Texto final", 60_000, pending.completionKey, "1.2.3"))
+                second.state.value.shouldBeInstanceOf<EducationalExperimentState.Completed>()
+                store.marker shouldBe null
+            }
+        }
+
+        test("a completion refused for lack of session is persisted too") {
+            runTest {
+                var current: EducationalSession? = session
+                val clock = FakeElapsedClock(1_000)
+                val store = FakeMarkerStore()
+                val coordinator = readyCoordinator(clock = clock, store = store) { current }
+                coordinator.markFirstKey()
+                clock.value = 4_000
+                current = null
+                coordinator.complete("Texto final") shouldBe true
+                val pending = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>().pendingCompletion!!
+                store.marker?.status shouldBe "COMPLETING"
+                store.marker?.pendingCompletion shouldBe PendingCompletionMarker("Texto final", 3_000, pending.completionKey)
             }
         }
 
@@ -852,24 +992,61 @@ class EducationalExperimentCoordinatorTest : FunSpec({
             }
         }
 
-        test("restore without a first key or for another run also loses the timer") {
+        test("a same-run marker without a first key restores with the timer intact: nothing was measured yet") {
             runTest {
-                val noKey = coordinator(
-                    FakeExperimentApi(activeRun = run(ExperimentCondition.ASSISTED)),
-                    store = FakeMarkerStore(marker(firstKeyAtMs = null)),
-                )
-                noKey.restore()
-                advanceUntilIdle()
-                noKey.state.value shouldBe
-                    EducationalExperimentState.Active(run(ExperimentCondition.ASSISTED), firstKeyAtMs = null, timerLost = true)
+                for (bootId in listOf("boot-1", "boot-2", EducationalExperimentCoordinator.UnknownBootId)) {
+                    val api = FakeExperimentApi(activeRun = run(ExperimentCondition.ASSISTED))
+                    val clock = FakeElapsedClock(1_000)
+                    val noKey = coordinator(api, clock, FakeMarkerStore(marker(firstKeyAtMs = null, bootId = "boot-1")), bootId = bootId)
+                    noKey.restore()
+                    advanceUntilIdle()
+                    noKey.state.value shouldBe
+                        EducationalExperimentState.Active(run(ExperimentCondition.ASSISTED), firstKeyAtMs = null, timerLost = false)
+                    noKey.completionBlockedReason() shouldBe null
+                    noKey.markFirstKey()
+                    clock.value = 3_000
+                    noKey.complete("Texto final") shouldBe true
+                    advanceUntilIdle()
+                    api.lastDurationMs shouldBe 2_000
+                }
+            }
+        }
 
-                val otherRun = coordinator(
+        test("a marker with a first key from another boot loses the timer") {
+            runTest {
+                val coordinator = coordinator(
                     FakeExperimentApi(activeRun = run(ExperimentCondition.ASSISTED)),
-                    store = FakeMarkerStore(marker(firstKeyAtMs = 400, runId = "run-0")),
+                    store = FakeMarkerStore(marker(firstKeyAtMs = 400, bootId = "boot-1")),
+                    bootId = "boot-2",
                 )
-                otherRun.restore()
+                coordinator.restore()
                 advanceUntilIdle()
-                otherRun.state.value shouldBe
+                coordinator.state.value shouldBe
+                    EducationalExperimentState.Active(run(ExperimentCondition.ASSISTED), firstKeyAtMs = null, timerLost = true)
+            }
+        }
+
+        test("a marker of another run loses the timer even without a first key") {
+            runTest {
+                for (firstKey in listOf<Long?>(null, 400)) {
+                    val otherRun = coordinator(
+                        FakeExperimentApi(activeRun = run(ExperimentCondition.ASSISTED)),
+                        store = FakeMarkerStore(marker(firstKeyAtMs = firstKey, runId = "run-0")),
+                    )
+                    otherRun.restore()
+                    advanceUntilIdle()
+                    otherRun.state.value shouldBe
+                        EducationalExperimentState.Active(run(ExperimentCondition.ASSISTED), firstKeyAtMs = null, timerLost = true)
+                }
+            }
+        }
+
+        test("no marker at all loses the timer") {
+            runTest {
+                val coordinator = coordinator(FakeExperimentApi(activeRun = run(ExperimentCondition.ASSISTED)))
+                coordinator.restore()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe
                     EducationalExperimentState.Active(run(ExperimentCondition.ASSISTED), firstKeyAtMs = null, timerLost = true)
             }
         }
@@ -883,13 +1060,13 @@ class EducationalExperimentCoordinatorTest : FunSpec({
                 val store = FakeMarkerStore(marker(ExperimentCondition.UNASSISTED, firstKeyAtMs = 400))
                 val coordinator = coordinator(api, store = store)
                 coordinator.restore()
+                // Antes de que responda la red: el marcador ya cierra el gate.
+                coordinator.state.value shouldBe EducationalExperimentState.Restoring(markerRun(ExperimentCondition.UNASSISTED))
+                coordinator.correctionAllowed() shouldBe false
                 advanceUntilIdle()
                 coordinator.state.value shouldBe EducationalExperimentState.Failed(
-                    ExperimentRunResponse(
-                        id = "run-1", participantCode = "", condition = ExperimentCondition.UNASSISTED,
-                        taskVariant = "", promptText = "", status = "ACTIVE",
-                    ),
-                    EducationalMessages.experiment(SocketTimeoutException("timeout")),
+                    markerRun(ExperimentCondition.UNASSISTED),
+                    EducationalMessages.experiment(SocketTimeoutException("timeout"), ExperimentOp.RESTORE),
                     retryable = true,
                 )
                 coordinator.correctionAllowed() shouldBe false
@@ -918,6 +1095,111 @@ class EducationalExperimentCoordinatorTest : FunSpec({
     }
 
     context("restore") {
+        test("with an unassisted marker the gate is closed from the moment restore() is called") {
+            runTest(StandardTestDispatcher()) {
+                val gate = CompletableDeferred<Result<ExperimentRunResponse?>>()
+                val api = FakeExperimentApi(activeGate = gate)
+                val store = FakeMarkerStore(marker(ExperimentCondition.UNASSISTED, firstKeyAtMs = 400))
+                val coordinator = coordinator(api, store = store)
+                coordinator.restore()
+                coordinator.state.value shouldBe EducationalExperimentState.Restoring(markerRun(ExperimentCondition.UNASSISTED))
+                coordinator.correctionAllowed() shouldBe false
+                coordinator.activeRunId() shouldBe null
+                testScheduler.runCurrent()
+                coordinator.correctionAllowed() shouldBe false
+                // Mientras se restaura nada más se acepta.
+                coordinator.complete("Texto") shouldBe false
+                coordinator.cancel(CancelReason.ABANDONED)
+                coordinator.redeem("ABCDEFGH")
+                coordinator.start()
+                testScheduler.runCurrent()
+                api.cancelReasons shouldBe emptyList()
+                api.redeemedCodes shouldBe emptyList()
+                api.startedRunIds shouldBe emptyList()
+                coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Restoring>()
+
+                gate.complete(Result.success(run(ExperimentCondition.UNASSISTED)))
+                advanceUntilIdle()
+                coordinator.state.value shouldBe
+                    EducationalExperimentState.Active(run(ExperimentCondition.UNASSISTED), firstKeyAtMs = 400)
+                coordinator.correctionAllowed() shouldBe false
+            }
+        }
+
+        test("an assisted marker exposes its id while restoring and a pending one gates nothing") {
+            runTest(StandardTestDispatcher()) {
+                val gate = CompletableDeferred<Result<ExperimentRunResponse?>>()
+                val assisted = coordinator(FakeExperimentApi(activeGate = gate), store = FakeMarkerStore(marker()))
+                assisted.restore()
+                assisted.correctionAllowed() shouldBe true
+                assisted.activeRunId() shouldBe "run-1"
+
+                val pending = coordinator(FakeExperimentApi(activeGate = gate), store = FakeMarkerStore(marker(ExperimentCondition.UNASSISTED, status = "PENDING")))
+                pending.restore()
+                pending.state.value shouldBe EducationalExperimentState.Restoring(markerRun(ExperimentCondition.UNASSISTED, "PENDING"))
+                pending.correctionAllowed() shouldBe true
+                pending.activeRunId() shouldBe null
+                gate.complete(Result.success(null))
+                advanceUntilIdle()
+            }
+        }
+
+        test("without a marker restoring keeps normal use allowed") {
+            runTest(StandardTestDispatcher()) {
+                val gate = CompletableDeferred<Result<ExperimentRunResponse?>>()
+                val coordinator = coordinator(FakeExperimentApi(activeGate = gate))
+                coordinator.restore()
+                coordinator.state.value shouldBe EducationalExperimentState.Restoring(null)
+                coordinator.correctionAllowed() shouldBe true
+                coordinator.activeRunId() shouldBe null
+                gate.complete(Result.success(run(ExperimentCondition.UNASSISTED)))
+                advanceUntilIdle()
+                coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Active>()
+                coordinator.correctionAllowed() shouldBe false
+            }
+        }
+
+        test("a marker of another account is discarded before asking the backend") {
+            runTest {
+                val api = FakeExperimentApi(activeRun = null)
+                val store = FakeMarkerStore()
+                var current: EducationalSession? = session
+                val coordinator = readyCoordinator(ExperimentCondition.UNASSISTED, api, store = store) { current }
+                coordinator.markFirstKey()
+                store.marker?.ownerUserId shouldBe "student_001"
+
+                // Un 401 dejó la sesión fuera; otra cuenta entra en el mismo teléfono.
+                current = EducationalSession("student_002", "jwt-2", "2099-01-01T00:00:00Z")
+                coordinator.restore()
+                // Descartado antes de preguntar al backend.
+                store.marker shouldBe null
+                coordinator.state.value shouldBe EducationalExperimentState.Restoring(null)
+                coordinator.correctionAllowed() shouldBe true
+                advanceUntilIdle()
+                coordinator.state.value shouldBe EducationalExperimentState.Idle
+                api.activeTokens shouldBe listOf("jwt-2")
+                api.cancelledRunIds shouldBe emptyList()
+                api.sent shouldBe emptyList()
+            }
+        }
+
+        test("a pending completion of another account is discarded too and never resent with the new token") {
+            runTest {
+                val api = FakeExperimentApi(activeRun = null)
+                val store = FakeMarkerStore(
+                    marker(status = "COMPLETING", ownerUserId = "student_009", pendingCompletion = PendingCompletionMarker("Texto", 5_000, "key-9")),
+                )
+                val coordinator = coordinator(api, store = store)
+                coordinator.restore()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe EducationalExperimentState.Idle
+                store.marker shouldBe null
+                coordinator.retry()
+                advanceUntilIdle()
+                api.sent shouldBe emptyList()
+            }
+        }
+
         test("nothing to restore leaves Idle") {
             runTest {
                 val api = FakeExperimentApi(activeRun = null)
@@ -983,15 +1265,127 @@ class EducationalExperimentCoordinatorTest : FunSpec({
             }
         }
 
-        test("cancel clears local state even when the backend refuses") {
+        test("cancel publishes Cancelling while the request is in flight and refuses completion meanwhile") {
+            runTest(StandardTestDispatcher()) {
+                val gate = CompletableDeferred<Result<Unit>>()
+                val api = FakeExperimentApi(cancelGate = gate)
+                val clock = FakeElapsedClock(1_000)
+                val coordinator = readyCoordinator(ExperimentCondition.UNASSISTED, api, clock)
+                coordinator.markFirstKey()
+                clock.value = 2_000
+                coordinator.cancel(CancelReason.INTERRUPTED)
+                coordinator.state.value shouldBe EducationalExperimentState.Cancelling(run(ExperimentCondition.UNASSISTED))
+                coordinator.correctionAllowed() shouldBe false
+                coordinator.complete("Texto final") shouldBe false
+                testScheduler.runCurrent()
+                api.sent shouldBe emptyList()
+                gate.complete(Result.success(Unit))
+                advanceUntilIdle()
+                coordinator.state.value shouldBe EducationalExperimentState.Cancelled
+                coordinator.correctionAllowed() shouldBe true
+            }
+        }
+
+        test("a run the backend already closed (400/404) counts as cancelled") {
             runTest {
-                val api = FakeExperimentApi(cancelResult = Result.failure(EducationalHttpException(404, "gone")))
-                val coordinator = coordinator(api)
-                coordinator.redeem("ABCDEFGH")
+                for (status in listOf(400, 404)) {
+                    val api = FakeExperimentApi(cancelResult = Result.failure(EducationalHttpException(status, "gone")))
+                    val store = FakeMarkerStore()
+                    val coordinator = coordinator(api, store = store)
+                    coordinator.redeem("ABCDEFGH")
+                    advanceUntilIdle()
+                    coordinator.cancel(CancelReason.TECHNICAL_PROBLEM)
+                    advanceUntilIdle()
+                    api.cancelReasons shouldBe listOf(CancelReason.TECHNICAL_PROBLEM)
+                    coordinator.state.value shouldBe EducationalExperimentState.Cancelled
+                    store.marker shouldBe null
+                }
+            }
+        }
+
+        test("a cancel the backend did not confirm keeps the run, the marker and the gate, and Reintentar resends the same reason") {
+            runTest {
+                val errors = listOf<Throwable>(
+                    SocketTimeoutException("timeout"),
+                    EducationalHttpException(401, "expired"),
+                    EducationalHttpException(503, "down"),
+                )
+                for (error in errors) {
+                    val api = FakeExperimentApi(cancelResult = Result.failure(error))
+                    val store = FakeMarkerStore()
+                    var rejections = 0
+                    val coordinator = readyCoordinator(ExperimentCondition.UNASSISTED, api, store = store, onSessionRejected = { rejections++ })
+                    coordinator.cancel(CancelReason.INTERRUPTED)
+                    advanceUntilIdle()
+                    val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
+                    failed.run shouldBe run(ExperimentCondition.UNASSISTED)
+                    failed.retryable shouldBe true
+                    failed.pendingCancel shouldBe CancelReason.INTERRUPTED
+                    failed.message shouldBe EducationalMessages.experiment(error, ExperimentOp.CANCEL)
+                    coordinator.correctionAllowed() shouldBe false
+                    store.marker shouldBe marker(ExperimentCondition.UNASSISTED)
+                    rejections shouldBe if (error is EducationalHttpException && error.status == 401) 1 else 0
+
+                    api.cancelResult = Result.success(Unit)
+                    coordinator.retry()
+                    advanceUntilIdle()
+                    api.cancelReasons shouldBe listOf(CancelReason.INTERRUPTED, CancelReason.INTERRUPTED)
+                    coordinator.state.value shouldBe EducationalExperimentState.Cancelled
+                    store.marker shouldBe null
+                }
+            }
+        }
+
+        test("cancel without a session is a failure to retry, never a fake success") {
+            runTest {
+                var current: EducationalSession? = session
+                val api = FakeExperimentApi()
+                val store = FakeMarkerStore()
+                val coordinator = readyCoordinator(ExperimentCondition.UNASSISTED, api, store = store) { current }
+                current = null
+                coordinator.cancel(CancelReason.ABANDONED)
                 advanceUntilIdle()
-                coordinator.cancel(CancelReason.TECHNICAL_PROBLEM)
+                api.cancelReasons shouldBe emptyList()
+                coordinator.state.value shouldBe EducationalExperimentState.Failed(
+                    run(ExperimentCondition.UNASSISTED), EducationalMessages.SessionExpired, retryable = true,
+                    pendingCancel = CancelReason.ABANDONED,
+                )
+                coordinator.correctionAllowed() shouldBe false
+                store.marker shouldBe marker(ExperimentCondition.UNASSISTED)
+
+                current = session
+                coordinator.retry()
                 advanceUntilIdle()
-                api.cancelReasons shouldBe listOf(CancelReason.TECHNICAL_PROBLEM)
+                api.cancelReasons shouldBe listOf(CancelReason.ABANDONED)
+                coordinator.state.value shouldBe EducationalExperimentState.Cancelled
+            }
+        }
+
+        test("a failed cancel after a failed completion keeps the completion boundary closed and retries the cancel first") {
+            runTest {
+                val clock = FakeElapsedClock(1_000)
+                val api = FakeExperimentApi(failFirstCompletion = true, cancelResult = Result.failure(SocketTimeoutException("timeout")))
+                val coordinator = readyCoordinator(ExperimentCondition.ASSISTED, api, clock)
+                coordinator.markFirstKey()
+                clock.value = 2_000
+                coordinator.complete("Texto final")
+                advanceUntilIdle()
+                val pending = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>().pendingCompletion
+                coordinator.cancel(CancelReason.ABANDONED)
+                coordinator.state.value shouldBe EducationalExperimentState.Cancelling(run(ExperimentCondition.ASSISTED), pending)
+                coordinator.activeRunId() shouldBe null
+                advanceUntilIdle()
+                val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
+                failed.pendingCompletion shouldBe pending
+                failed.pendingCancel shouldBe CancelReason.ABANDONED
+                coordinator.activeRunId() shouldBe null
+                coordinator.correctionAllowed() shouldBe false
+
+                api.cancelResult = Result.success(Unit)
+                coordinator.retry()
+                advanceUntilIdle()
+                api.sent.size shouldBe 1
+                api.cancelReasons shouldBe listOf(CancelReason.ABANDONED, CancelReason.ABANDONED)
                 coordinator.state.value shouldBe EducationalExperimentState.Cancelled
             }
         }
