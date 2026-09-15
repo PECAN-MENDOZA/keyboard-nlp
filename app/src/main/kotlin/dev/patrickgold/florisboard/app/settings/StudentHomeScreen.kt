@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardActions
@@ -115,6 +116,7 @@ fun StudentHomeScreen() = FlorisScreen {
                 alias = activeSession.username.ifBlank { activeSession.userId },
                 connectionState = manager.connectionState.collectAsState().value,
                 onCheckConnection = manager::checkBackendConnection,
+                onJoinExperiment = { navController.navigate(Routes.Settings.Experiment) },
             )
         }
 
@@ -216,6 +218,7 @@ private fun AccountSection(
     alias: String,
     connectionState: EducationalBackendConnectionState,
     onCheckConnection: () -> Unit,
+    onJoinExperiment: () -> Unit,
 ) {
     LaunchedEffect(Unit) {
         if (connectionState is EducationalBackendConnectionState.Unknown) onCheckConnection()
@@ -259,6 +262,16 @@ private fun AccountSection(
                 Text(EducationalMessages.HowTo2)
                 Text(EducationalMessages.HowTo3)
             }
+        }
+        Spacer(Modifier.height(12.dp))
+        // Solo con sesión válida: la pantalla de la prueba exige cuenta de alumno.
+        Button(
+            onClick = onJoinExperiment,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+        ) {
+            Text(EducationalMessages.ExperimentTitle)
         }
     }
 }

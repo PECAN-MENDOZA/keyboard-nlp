@@ -150,7 +150,29 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.AvatarDescription,
             EducationalMessages.InvalidAccessCode, EducationalMessages.TimerLost,
             EducationalMessages.CorrectionDisabledInTask,
-        ) + networkErrors.map { EducationalMessages.login(it) } +
+            EducationalMessages.ExperimentTitle, EducationalMessages.ExperimentNoSession,
+            EducationalMessages.ExperimentBackHome, EducationalMessages.ExperimentCodeIntro,
+            EducationalMessages.ExperimentCodeLabel, EducationalMessages.ExperimentValidateCode,
+            EducationalMessages.ExperimentValidating, EducationalMessages.ExperimentReadyTitle,
+            EducationalMessages.ExperimentReadyIntro, EducationalMessages.ExperimentParticipantLabel,
+            EducationalMessages.ExperimentPromptLabel, EducationalMessages.ExperimentConditionLabel,
+            EducationalMessages.ConditionAssisted, EducationalMessages.ConditionUnassisted,
+            EducationalMessages.ExperimentStart, EducationalMessages.ExperimentStarting,
+            EducationalMessages.ExperimentTextLabel, EducationalMessages.ExperimentElapsedLabel,
+            EducationalMessages.ExperimentElapsedNone, EducationalMessages.ExperimentFinish,
+            EducationalMessages.ExperimentSaving, EducationalMessages.ExperimentSavingDetail,
+            EducationalMessages.ExperimentCancel, EducationalMessages.ExperimentCancelTitle,
+            EducationalMessages.ExperimentCancelIntro, EducationalMessages.CancelReasonAbandoned,
+            EducationalMessages.CancelReasonTechnical, EducationalMessages.CancelReasonInterrupted,
+            EducationalMessages.ExperimentKeepGoing, EducationalMessages.ExperimentRetry,
+            EducationalMessages.ExperimentCloseAction, EducationalMessages.ExperimentBack,
+            EducationalMessages.ExperimentCompleted, EducationalMessages.ExperimentCompletedDetail,
+            EducationalMessages.ExperimentCancelled, EducationalMessages.ExperimentCancelledDetail,
+            EducationalMessages.ExperimentPrivacy, EducationalMessages.ExperimentCompletionRejected,
+            EducationalMessages.textCounter(12, 10_000), EducationalMessages.elapsedDescription("1:05"),
+        ) + ExperimentCondition.entries.map { EducationalMessages.conditionLabel(it) } +
+            CancelReason.entries.map { EducationalMessages.cancelReasonLabel(it) } +
+            networkErrors.map { EducationalMessages.login(it) } +
             networkErrors.map { EducationalMessages.correction(it) } +
             networkErrors.map { EducationalMessages.experiment(it) } +
             listOf(400, 401, 403, 404, 409, 418, 502, 503).flatMap { code ->
