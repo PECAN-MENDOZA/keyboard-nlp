@@ -1502,6 +1502,29 @@ class EducationalExperimentCoordinatorTest : FunSpec({
     }
 
     context("cancel and clear") {
+        test("an unconfirmed cancel of a PENDING run never blocks ordinary corrections") {
+            runTest {
+                val api = FakeExperimentApi(cancelResult = Result.failure(SocketTimeoutException("timeout")))
+                val coordinator = coordinator(api)
+                coordinator.redeem("ABCDEFGH")
+                advanceUntilIdle()
+                coordinator.state.value shouldBe
+                    EducationalExperimentState.Ready(run(ExperimentCondition.ASSISTED, status = "PENDING"))
+
+                coordinator.cancel(CancelReason.ABANDONED)
+                // En vuelo: nada se midió, el gate de uso normal sigue abierto.
+                coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Cancelling>()
+                coordinator.correctionAllowed() shouldBe true
+                coordinator.activeRunId() shouldBe null
+                advanceUntilIdle()
+                // Sin confirmar: se conserva el motivo para reintentar, pero sin bloquear.
+                val failed = coordinator.state.value.shouldBeInstanceOf<EducationalExperimentState.Failed>()
+                failed.pendingCancel shouldBe CancelReason.ABANDONED
+                coordinator.correctionAllowed() shouldBe true
+                coordinator.activeRunId() shouldBe null
+            }
+        }
+
         test("cancel from Active sends the reason and clears the run") {
             runTest {
                 val api = FakeExperimentApi()

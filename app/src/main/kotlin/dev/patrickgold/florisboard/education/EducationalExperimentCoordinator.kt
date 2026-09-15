@@ -256,13 +256,14 @@ class EducationalExperimentCoordinator(
     /**
      * Desenlace en duda: una finalización congelada, en vuelo o sin confirmar (el backend puede
      * haberla guardado ya) o una cancelación en vuelo o sin confirmar (el alumno ya abandonó).
-     * En cualquier condición se cierra el gate y se oculta el id.
+     * En cualquier condición se cierra el gate y se oculta el id. Cancelar una ejecución que aún
+     * no empezó (PENDING) no es frontera: nada se midió y el uso normal no debe bloquearse.
      */
     private fun atCompletionBoundary(current: EducationalExperimentState): Boolean = when (current) {
         is EducationalExperimentState.Completing -> true
-        is EducationalExperimentState.Cancelling -> true
+        is EducationalExperimentState.Cancelling -> current.run.status == StatusActive
         is EducationalExperimentState.Failed ->
-            current.pendingCancel != null || (current.pendingCompletion != null && current.run?.status == StatusActive)
+            current.run?.status == StatusActive && (current.pendingCancel != null || current.pendingCompletion != null)
         else -> false
     }
 
