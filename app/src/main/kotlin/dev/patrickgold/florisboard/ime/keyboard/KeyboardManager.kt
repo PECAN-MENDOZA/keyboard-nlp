@@ -1036,6 +1036,6 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
  * pulsación de una escritura controlada. Las teclas de sistema (cambiar vista, ajustes…) no.
  */
 private fun KeyData.isTypingKey(): Boolean = when (code) {
-    KeyCode.DELETE, KeyCode.DELETE_WORD, KeyCode.FORWARD_DELETE, KeyCode.FORWARD_DELETE_WORD -> true
+    KeyCode.DELETE, KeyCode.DELETE_WORD, KeyCode.FORWARD_DELETE, KeyCode.FORWARD_DELETE_WORD, KeyCode.ENTER -> true
     else -> code >= KeyCode.Spec.CHARACTERS_MIN && (type == KeyType.CHARACTER || type == KeyType.NUMERIC)
 }

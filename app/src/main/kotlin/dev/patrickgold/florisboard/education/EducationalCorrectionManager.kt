@@ -241,6 +241,14 @@ class EducationalCorrectionManager(context: Context) {
     }
 
     private fun runCorrection(extractedText: ExtractedEducationalText) {
+        // Se repite aquí (además de en requestCorrection) para cubrir retryCorrection: un
+        // reintento tras un error no debe poder llegar al backend si mientras tanto la
+        // ejecución pasó a UNASSISTED o cruzó el límite. Ver docs/ux-smoke-test.md, Task 5:
+        // "IA en UNASSISTED y Reintentar tras error: ningún request llega al backend".
+        if (!experiment.correctionAllowed()) {
+            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInTask, NoticeKind.INFO), NOTICE_MS)
+            return
+        }
         val processing = EducationalCorrectionState.Processing(extractedText, SystemClock.elapsedRealtime())
         show(processing)
         scope.launch {
