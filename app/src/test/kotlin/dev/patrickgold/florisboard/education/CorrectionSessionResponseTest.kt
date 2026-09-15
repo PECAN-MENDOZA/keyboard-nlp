@@ -68,6 +68,19 @@ class CorrectionSessionResponseTest : FunSpec({
         options.map { it.text } shouldBe listOf("tuvo")
         options.single().recommended shouldBe true
     }
+
+    test("plain suggestions are capped at MaxDisplayOptions even after dropping the original text") {
+        MaxDisplayOptions shouldBe 3
+        val response = response(
+            suggestions = listOf("Está bien", "Esta bien", "Estaba bien", "Está bien!", "Esta bien!"),
+        )
+
+        val options = response.displayOptions().filter { it.text != "texto" }.take(MaxDisplayOptions)
+
+        options.map { it.text } shouldBe listOf("Está bien", "Esta bien", "Estaba bien")
+        options.size shouldBe MaxDisplayOptions
+        options.first().recommended shouldBe true
+    }
 })
 
 private fun response(

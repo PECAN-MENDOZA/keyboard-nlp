@@ -24,6 +24,7 @@ Marcar cada casilla con la fecha y el resultado.
 
 ## Teclado — globos (probar en Google Keep, WhatsApp y Chrome)
 - [x] Al llegar sugerencias: las teclas desaparecen, la app ocupa toda la pantalla, aparecen avatar + hasta 3 globos con cambios resaltados; el primero dice "Recomendada · N cambios".
+- [ ] Tope de tres globos (la IA solo manda más de una opción cuando la oración es ambigua): "mañana voy al parque con mis amigos" → ningún globo (ya está bien); "esta bien, nos vemos luego" → 1 globo ("está bien, nos vemos luego"); "a mi me gusta que ellos juega mucho" → 2 globos (recomendada "…juegan mucho" + "…juega mucho"); "se que no vendra hoy" → 2 globos ("sé que…" / "se que…"). Nunca más de 3 aunque la IA mandara más. (pendiente en el OnePlus)
 - [x] Tocar fuera de los globos llega a la app (mover cursor, tocar botones de la app).
 - [x] Toque corto en un globo: reemplaza el texto, vuelven las teclas, tira "✓ Corregido · ↶ Deshacer" ~3 s.
 - [x] ↶ Deshacer dentro de los 3 s restaura el texto original.
