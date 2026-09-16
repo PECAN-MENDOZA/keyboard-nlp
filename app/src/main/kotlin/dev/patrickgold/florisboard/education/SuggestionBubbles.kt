@@ -116,8 +116,10 @@ fun SuggestionBubblesOverlay() {
         onDispose { windowController.setOverlayTouchableRects(null) }
     }
 
-    // Nunca se ofrece como globo una opción idéntica al texto original.
-    val options = current.response.displayOptions().filter { it.text != current.extractedText.text }
+    // Nunca se ofrece como globo una opción idéntica al texto original, y nunca más de tres globos.
+    val options = current.response.displayOptions()
+        .filter { it.text != current.extractedText.text }
+        .take(MaxDisplayOptions)
 
     LaunchedEffect(maxX, maxY) {
         offsetX = offsetX.coerceIn(0f, maxX)

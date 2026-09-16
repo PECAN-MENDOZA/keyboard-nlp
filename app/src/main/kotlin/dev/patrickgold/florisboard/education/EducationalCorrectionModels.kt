@@ -99,6 +99,9 @@ data class CorrectionWordResponse(
     val end: Int? = null,
 )
 
+/** Tope de globos: el alumno elige entre como mucho tres opciones (la IA solo manda más de una si la oración es ambigua). */
+const val MaxDisplayOptions = 3
+
 @Serializable
 data class CorrectionSessionResponse(
     @SerialName("id_sesion")
@@ -122,7 +125,7 @@ data class CorrectionSessionResponse(
         val richOptions = suggestionOptions
             .filter { it.text.isNotBlank() }
             .distinctBy { it.text }
-            .take(3)
+            .take(MaxDisplayOptions)
         if (richOptions.isNotEmpty()) {
             return richOptions
         }
@@ -130,7 +133,7 @@ data class CorrectionSessionResponse(
             .filter { it.isNotBlank() }
             .ifEmpty { listOf(correctedText) }
             .distinct()
-            .take(3)
+            .take(MaxDisplayOptions)
             .mapIndexed { index, text ->
                 CorrectionSuggestionOption(
                     text = text,
