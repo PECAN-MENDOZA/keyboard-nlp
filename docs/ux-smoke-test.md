@@ -19,6 +19,7 @@ Marcar cada casilla con la fecha y el resultado.
 - [ ] IA sin selección: globo ámbar "Sombrea el texto que quieres corregir y toca IA." se cierra solo (~4 s). (pendiente)
 - [ ] IA en campo de contraseña (login de cualquier app): "Aquí no se puede usar la corrección." (pendiente)
 - [x] IA con texto ya correcto: globo verde "Tu texto ya está bien escrito" ~3 s; el teclado no se colapsa.
+- [x] Selección con espacios en los bordes (dedo poco preciso: "hola" + " voy al parque…"): el espacio queda fuera del rango. Texto correcto → "Tu texto ya está bien escrito" (no "Recomendada · 0 cambios"); con errores, aplicar da "hola voy al parque…" y nunca "holavoy…". Deshacer restaura el original exacto. (OnePlus, 2026-09-16)
 - [x] IA con la IA detenida (`..\local.ps1 Stop` solo IA): globo rojo "Sin conexión con la IA." con ↻ Reintentar y ✕.
 - [ ] Sin sesión iniciada, tocar IA muestra el globo "Inicia sesión en la app del teclado para usar la corrección."; con sesión vencida (borrar token o esperar), "Tu sesión terminó…". Ambos ámbar con ✕. (pendiente)
 

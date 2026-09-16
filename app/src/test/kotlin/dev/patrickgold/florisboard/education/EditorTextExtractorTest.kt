@@ -47,6 +47,37 @@ class EditorTextExtractorTest : FunSpec({
         result.value.text shouldBe text
     }
 
+    test("surrounding whitespace is left outside the range so replacing never glues words") {
+        // "hola" + " voy al parque " sombreado con el espacio inicial y final (dedo poco preciso):
+        // la IA devuelve el texto recortado; si el rango incluyera los espacios, aplicar la
+        // sugerencia daria "holavoy al parque" y, con texto ya correcto, no se reconoceria
+        // como igual (globo "0 cambios" en vez de "ya esta bien escrito").
+        val text = "hola voy al parque ya"
+        val content = content(text = text, selection = EditorRange(4, 19))
+
+        val result = EditorTextExtractor.extract(content)
+
+        result as EducationalExtractionResult.Ready
+        result.value.text shouldBe "voy al parque"
+        result.value.range shouldBe EditorRange(5, 18)
+    }
+
+    test("a selection with an offset keeps the trimmed range in absolute coordinates") {
+        val content = EditorContent(
+            text = " iva ",
+            offset = 8,
+            localSelection = EditorRange(0, 5),
+            localComposing = EditorRange.Unspecified,
+            localCurrentWord = EditorRange.Unspecified,
+        )
+
+        val result = EditorTextExtractor.extract(content)
+
+        result as EducationalExtractionResult.Ready
+        result.value.text shouldBe "iva"
+        result.value.range shouldBe EditorRange(9, 12)
+    }
+
     test("no selection (just a cursor) is blocked and asks to select first") {
         val text = "El nino iva a la escuela."
         val content = content(text = text, selection = EditorRange.cursor(10))

@@ -17,6 +17,7 @@
 package dev.patrickgold.florisboard.education
 
 import dev.patrickgold.florisboard.ime.editor.EditorContent
+import dev.patrickgold.florisboard.ime.editor.EditorRange
 
 /**
  * Extrae el texto a corregir desde el editor activo.
@@ -34,10 +35,19 @@ object EditorTextExtractor {
         if (!content.localSelection.isSelectionMode) {
             return EducationalExtractionResult.Blocked(SelectFirstMessage)
         }
-        val text = content.selectedText
-        if (text.isBlank()) {
+        val raw = content.selectedText
+        if (raw.isBlank()) {
             return EducationalExtractionResult.Blocked(SelectFirstMessage)
         }
+        // Los espacios que el dedo arrastra al sombrear quedan FUERA del rango: la IA
+        // devuelve el texto recortado, y si el rango los incluyera, aplicar la sugerencia
+        // los borraria (pegando "hola" + "voy") y un texto ya correcto no se reconoceria
+        // como igual (globo "0 cambios" en vez de "ya esta bien escrito").
+        val leading = raw.length - raw.trimStart().length
+        val trailing = raw.length - raw.trimEnd().length
+        val text = raw.trim()
+        val selection = content.selection
+        val range = EditorRange(selection.start + leading, selection.end - trailing)
         if (text.length > EDUCATIONAL_BACKEND_MAX_CHARS) {
             return EducationalExtractionResult.Blocked(
                 EducationalMessages.tooLong(EDUCATIONAL_BACKEND_MAX_CHARS),
@@ -46,7 +56,7 @@ object EditorTextExtractor {
         return EducationalExtractionResult.Ready(
             ExtractedEducationalText(
                 text = text,
-                range = content.selection,
+                range = range,
                 source = EducationalTextSource.SELECTION,
             )
         )
