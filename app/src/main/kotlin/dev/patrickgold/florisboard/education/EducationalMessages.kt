@@ -20,6 +20,7 @@ import java.net.ConnectException
 import java.net.NoRouteToHostException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.Locale
 
 /**
  * Único lugar donde viven los textos que ve el alumno. Login y corrección se traducen por
@@ -41,57 +42,74 @@ object EducationalMessages {
     const val Corrected = "Corregido"
     const val Editing = "Editando"
 
-    // Pruebas (los textos de la pantalla del experimento se retiran con ella en la Task 10)
-    const val CorrectionDisabledInTask = "La corrección está desactivada en esta tarea."
-    const val ExperimentTitle = "Participar en una prueba"
-    const val ExperimentNoSession =
-        "Para participar en una prueba necesitas iniciar sesión en la app del teclado. " +
-            "Mientras tanto, el teclado y la corrección siguen funcionando como siempre."
-    const val ExperimentBackHome = "Volver al inicio"
-    const val ExperimentCodeIntro = "Escribe el código de 8 caracteres que te dio el investigador."
-    const val ExperimentCodeLabel = "Código de acceso"
-    const val ExperimentValidateCode = "Validar código"
-    const val ExperimentValidating = "Validando el código…"
-    const val ExperimentReadyTitle = "Prueba lista"
-    const val ExperimentReadyIntro = "Lee la consigna con calma. El tiempo se mide desde tu primera tecla."
-    const val ExperimentParticipantLabel = "Participante"
-    const val ExperimentPromptLabel = "Consigna"
-    const val ExperimentConditionLabel = "Modo de esta prueba"
-    const val ConditionAssisted = "Con asistencia de la IA"
-    const val ConditionUnassisted = "Sin asistencia"
-    const val ExperimentStart = "Comenzar tarea"
-    const val ExperimentStarting = "Iniciando la tarea…"
-    const val ExperimentTextLabel = "Tu texto"
-    const val ExperimentElapsedLabel = "Tiempo escribiendo"
-    const val ExperimentElapsedNone = "—"
-    const val ExperimentFinish = "Finalizar y guardar"
-    const val ExperimentSaving = "Guardando tu texto…"
-    const val ExperimentSavingDetail = "No cierres la app."
-    const val ExperimentCancel = "Cancelar prueba"
-    const val ExperimentCancelTitle = "¿Cancelar la prueba?"
-    const val ExperimentCancelIntro = "Elige el motivo. Tu texto no se guardará."
+    // Pruebas de oraciones
+    const val CorrectionDisabledInSentence = "La corrección está desactivada en esta oración"
+    const val TestsTitle = "Pruebas"
+    const val TestsEmpty = "No tienes pruebas pendientes."
+    const val TestsLoading = "Buscando tus pruebas…"
+    const val TestsRefresh = "Actualizar"
+    const val TestStatusPending = "Pendiente"
+    const val TestStatusInProgress = "En curso"
+    const val TestStatusCompleted = "Completada"
+    const val TestStartQuestion = "¿Comenzar la prueba %s? Tu profesor te dirá qué escribir."
+    const val TestStart = "Comenzar prueba"
+    const val TestStarting = "Preparando la prueba…"
+    const val TestInProgress = "Prueba en curso"
+    const val SentenceProgress = "Oración %d de %d"
+    const val WithHelp = "Con ayuda"
+    const val WithoutHelp = "Sin ayuda"
+    const val SentenceStart = "Comenzar"
+    const val SentenceFinish = "Terminar"
+    const val SentenceCorrecting = "Corrigiendo…"
+    const val SentenceEmptyQuestion = "¿Dejar esta oración en blanco?"
+    const val Yes = "Sí"
+    const val No = "No"
+    const val Saving = "Guardando…"
+    const val SentenceSaveFailed = "No pudimos guardar"
+    const val SentenceRetry = "Reintentar"
+    const val CancelTechnical = "Cancelar (problema técnico)"
+    const val CancelTest = "Cancelar prueba"
+    const val CancelTestTitle = "¿Cancelar la prueba?"
+    const val CancelTestIntro = "Elige el motivo. Lo que no se haya guardado se perderá."
     const val CancelReasonAbandoned = "Ya no quiero seguir"
     const val CancelReasonTechnical = "Tuve un problema técnico"
     const val CancelReasonInterrupted = "Me interrumpieron"
-    const val ExperimentKeepGoing = "Seguir con la prueba"
-    const val ExperimentRetry = "Reintentar"
-    const val ExperimentCloseAction = "Cerrar"
-    const val ExperimentBack = "Volver"
-    const val ExperimentCompleted = "Tarea guardada"
-    const val ExperimentCompletedDetail = "Gracias por participar. Ya puedes cerrar esta pantalla."
-    const val ExperimentCancelled = "Prueba cancelada"
-    const val ExperimentCancelledDetail = "Si quieres volver a intentarlo, pide un código nuevo al investigador."
-    const val ExperimentPrivacy = "Tu texto y el tiempo que tardas se guardan solo para la investigación."
-    const val ExperimentCompletionRejected = "No se pudo enviar tu texto. Revisa que hayas escrito algo e inténtalo de nuevo."
-    const val ExperimentRestoring = "Comprobando tu prueba…"
-    const val ExperimentCancelling = "Cancelando la prueba…"
+    const val KeepGoing = "Seguir con la prueba"
+    const val Cancelling = "Cancelando la prueba…"
+    const val TestCompleted = "¡Prueba completada! Gracias."
+    const val TestCancelled = "Prueba cancelada."
+    const val ClockLost = "El teléfono se reinició durante la oración. Solo puedes cancelar la prueba."
+    const val BackHome = "Volver al inicio"
+    const val Back = "Volver"
     const val TestConflict = "No se pudo continuar con la prueba. Avisa a tu profesor."
-    const val LogoutDuringExperiment =
+    const val LogoutDuringTest =
         "Tienes una prueba en curso. Si cierras sesión se perderá el texto que no se haya guardado."
 
+    fun testStartQuestion(title: String): String = TestStartQuestion.format(Locale.ROOT, title)
+
+    fun sentenceProgress(position: Int, total: Int): String = SentenceProgress.format(Locale.ROOT, position, total)
+
+    fun sentenceCount(count: Int): String = if (count == 1) "1 oración" else "$count oraciones"
+
+    /** Botón de inicio: "Pruebas" a secas o con las pendientes cuando ya se listaron. */
+    fun testsWithPending(pending: Int): String = when (pending) {
+        0 -> TestsTitle
+        1 -> "$TestsTitle · 1 pendiente"
+        else -> "$TestsTitle · $pending pendientes"
+    }
+
+    fun testInProgress(position: Int, total: Int): String =
+        "$TestInProgress · ${sentenceProgress(position, total).replaceFirstChar { it.lowercase() }}"
+
     fun assistanceLabel(assistance: SentenceAssistance): String = when (assistance) {
-        SentenceAssistance.ASSISTED -> ConditionAssisted
-        SentenceAssistance.UNASSISTED -> ConditionUnassisted
+        SentenceAssistance.ASSISTED -> WithHelp
+        SentenceAssistance.UNASSISTED -> WithoutHelp
+    }
+
+    fun testStatusLabel(status: String): String = when (status) {
+        AssignedTest.StatusInProgress -> TestStatusInProgress
+        AssignedTest.StatusCompleted -> TestStatusCompleted
+        else -> TestStatusPending
     }
 
     fun cancelReasonLabel(reason: AttemptCancelReason): String = when (reason) {
@@ -99,10 +117,6 @@ object EducationalMessages {
         AttemptCancelReason.TECHNICAL_PROBLEM -> CancelReasonTechnical
         AttemptCancelReason.INTERRUPTED -> CancelReasonInterrupted
     }
-
-    fun textCounter(length: Int, max: Int): String = "$length / $max"
-
-    fun elapsedDescription(display: String): String = "$ExperimentElapsedLabel: $display"
 
     // App
     const val AppTitle = "Teclado adaptativo"

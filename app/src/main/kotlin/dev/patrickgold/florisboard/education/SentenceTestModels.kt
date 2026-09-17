@@ -22,7 +22,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class SentenceAssistance { ASSISTED, UNASSISTED }
 
-/** Prueba asignada al alumno, tal como la lista `GET /tests/assigned`. */
+/** Prueba asignada al alumno, tal como la lista `GET /tests/assigned` (`PENDING`, `IN_PROGRESS` o `COMPLETED`). */
 @Serializable
 data class AssignedTest(
     val testId: String,
@@ -30,7 +30,16 @@ data class AssignedTest(
     val title: String,
     val sentenceCount: Int,
     val status: String,
-)
+) {
+    val isPending: Boolean get() = status == StatusPending
+    val isInProgress: Boolean get() = status == StatusInProgress
+
+    companion object {
+        const val StatusPending = "PENDING"
+        const val StatusInProgress = "IN_PROGRESS"
+        const val StatusCompleted = "COMPLETED"
+    }
+}
 
 @Serializable
 data class StartAttemptRequest(val appVersion: String)

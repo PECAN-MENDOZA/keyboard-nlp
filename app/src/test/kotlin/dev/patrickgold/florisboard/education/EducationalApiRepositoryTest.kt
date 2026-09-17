@@ -21,8 +21,8 @@ import io.kotest.matchers.shouldBe
 
 class EducationalApiRepositoryTest : FunSpec({
     test("the http exception keeps the raw body for the callers that need it") {
-        val error = EducationalHttpException(404, """{"message":"No experiment run to restore"}""")
-        error.body shouldBe """{"message":"No experiment run to restore"}"""
-        error.message shouldBe """HTTP 404: {"message":"No experiment run to restore"}"""
+        val error = EducationalHttpException(409, """{"message":"Sentence already finished"}""")
+        error.body shouldBe """{"message":"Sentence already finished"}"""
+        error.message shouldBe """HTTP 409: {"message":"Sentence already finished"}"""
     }
 })

@@ -117,6 +117,66 @@ class EducationalMessagesTest : FunSpec({
         }
     }
 
+    context("sentence test screens") {
+        test("every screen text is non-empty") {
+            listOf(
+                EducationalMessages.TestsTitle, EducationalMessages.TestsEmpty, EducationalMessages.TestsLoading,
+                EducationalMessages.TestsRefresh, EducationalMessages.TestStatusPending,
+                EducationalMessages.TestStatusInProgress, EducationalMessages.TestStatusCompleted,
+                EducationalMessages.TestStart, EducationalMessages.TestStarting, EducationalMessages.TestInProgress,
+                EducationalMessages.WithHelp, EducationalMessages.WithoutHelp, EducationalMessages.SentenceStart,
+                EducationalMessages.SentenceFinish, EducationalMessages.SentenceCorrecting,
+                EducationalMessages.SentenceEmptyQuestion, EducationalMessages.Yes, EducationalMessages.No,
+                EducationalMessages.Saving, EducationalMessages.SentenceSaveFailed, EducationalMessages.SentenceRetry,
+                EducationalMessages.CancelTechnical, EducationalMessages.CancelTest, EducationalMessages.CancelTestTitle,
+                EducationalMessages.CancelTestIntro, EducationalMessages.KeepGoing, EducationalMessages.Cancelling,
+                EducationalMessages.TestCompleted, EducationalMessages.TestCancelled, EducationalMessages.ClockLost,
+                EducationalMessages.BackHome, EducationalMessages.Back, EducationalMessages.LogoutDuringTest,
+                EducationalMessages.CorrectionDisabledInSentence,
+            ).forEach { text -> text.isNotBlank() shouldBe true }
+        }
+        test("the fixed texts of the brief") {
+            EducationalMessages.TestsTitle shouldBe "Pruebas"
+            EducationalMessages.TestsEmpty shouldBe "No tienes pruebas pendientes."
+            EducationalMessages.TestStart shouldBe "Comenzar prueba"
+            EducationalMessages.WithHelp shouldBe "Con ayuda"
+            EducationalMessages.WithoutHelp shouldBe "Sin ayuda"
+            EducationalMessages.SentenceStart shouldBe "Comenzar"
+            EducationalMessages.SentenceFinish shouldBe "Terminar"
+            EducationalMessages.SentenceEmptyQuestion shouldBe "¿Dejar esta oración en blanco?"
+            EducationalMessages.TestCompleted shouldBe "¡Prueba completada! Gracias."
+            EducationalMessages.SentenceSaveFailed shouldBe "No pudimos guardar"
+            EducationalMessages.SentenceRetry shouldBe "Reintentar"
+            EducationalMessages.CancelTechnical shouldBe "Cancelar (problema técnico)"
+            EducationalMessages.CorrectionDisabledInSentence shouldBe "La corrección está desactivada en esta oración"
+            EducationalMessages.ClockLost shouldBe
+                "El teléfono se reinició durante la oración. Solo puedes cancelar la prueba."
+        }
+        test("SentenceProgress formats position and total") {
+            EducationalMessages.sentenceProgress(3, 20) shouldBe "Oración 3 de 20"
+            EducationalMessages.sentenceProgress(1, 3) shouldBe "Oración 1 de 3"
+            EducationalMessages.sentenceCount(1) shouldBe "1 oración"
+            EducationalMessages.sentenceCount(3) shouldBe "3 oraciones"
+        }
+        test("TestStartQuestion names the test") {
+            EducationalMessages.testStartQuestion("Dictado 1") shouldBe
+                "¿Comenzar la prueba Dictado 1? Tu profesor te dirá qué escribir."
+        }
+        test("the home button shows the pending count only when there is one") {
+            EducationalMessages.testsWithPending(0) shouldBe "Pruebas"
+            EducationalMessages.testsWithPending(1) shouldBe "Pruebas · 1 pendiente"
+            EducationalMessages.testsWithPending(4) shouldBe "Pruebas · 4 pendientes"
+            EducationalMessages.testInProgress(2, 3) shouldBe "Prueba en curso · oración 2 de 3"
+        }
+        test("assistance and status labels") {
+            EducationalMessages.assistanceLabel(SentenceAssistance.ASSISTED) shouldBe "Con ayuda"
+            EducationalMessages.assistanceLabel(SentenceAssistance.UNASSISTED) shouldBe "Sin ayuda"
+            EducationalMessages.testStatusLabel("PENDING") shouldBe "Pendiente"
+            EducationalMessages.testStatusLabel("IN_PROGRESS") shouldBe "En curso"
+            EducationalMessages.testStatusLabel("COMPLETED") shouldBe "Completada"
+        }
+    }
+
     test("recommended label is pluralized") {
         EducationalMessages.recommendedLabel(1) shouldBe "Recomendada · 1 cambio"
         EducationalMessages.recommendedLabel(3) shouldBe "Recomendada · 3 cambios"
@@ -149,29 +209,28 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.Undo, EducationalMessages.Done,
             EducationalMessages.Close, EducationalMessages.CloseDescription,
             EducationalMessages.AvatarDescription,
-            EducationalMessages.CorrectionDisabledInTask, EducationalMessages.TestConflict,
-            EducationalMessages.ExperimentTitle, EducationalMessages.ExperimentNoSession,
-            EducationalMessages.ExperimentBackHome, EducationalMessages.ExperimentCodeIntro,
-            EducationalMessages.ExperimentCodeLabel, EducationalMessages.ExperimentValidateCode,
-            EducationalMessages.ExperimentValidating, EducationalMessages.ExperimentReadyTitle,
-            EducationalMessages.ExperimentReadyIntro, EducationalMessages.ExperimentParticipantLabel,
-            EducationalMessages.ExperimentPromptLabel, EducationalMessages.ExperimentConditionLabel,
-            EducationalMessages.ConditionAssisted, EducationalMessages.ConditionUnassisted,
-            EducationalMessages.ExperimentStart, EducationalMessages.ExperimentStarting,
-            EducationalMessages.ExperimentTextLabel, EducationalMessages.ExperimentElapsedLabel,
-            EducationalMessages.ExperimentElapsedNone, EducationalMessages.ExperimentFinish,
-            EducationalMessages.ExperimentSaving, EducationalMessages.ExperimentSavingDetail,
-            EducationalMessages.ExperimentCancel, EducationalMessages.ExperimentCancelTitle,
-            EducationalMessages.ExperimentCancelIntro, EducationalMessages.CancelReasonAbandoned,
+            EducationalMessages.CorrectionDisabledInSentence, EducationalMessages.TestConflict,
+            EducationalMessages.TestsTitle, EducationalMessages.TestsEmpty,
+            EducationalMessages.TestsLoading, EducationalMessages.TestsRefresh,
+            EducationalMessages.TestStatusPending, EducationalMessages.TestStatusInProgress,
+            EducationalMessages.TestStatusCompleted, EducationalMessages.testStartQuestion("Dictado 1"),
+            EducationalMessages.TestStart, EducationalMessages.TestStarting,
+            EducationalMessages.TestInProgress, EducationalMessages.sentenceProgress(1, 3),
+            EducationalMessages.WithHelp, EducationalMessages.WithoutHelp,
+            EducationalMessages.SentenceStart, EducationalMessages.SentenceFinish,
+            EducationalMessages.SentenceCorrecting, EducationalMessages.SentenceEmptyQuestion,
+            EducationalMessages.Yes, EducationalMessages.No,
+            EducationalMessages.Saving, EducationalMessages.SentenceSaveFailed,
+            EducationalMessages.SentenceRetry, EducationalMessages.CancelTechnical,
+            EducationalMessages.CancelTest, EducationalMessages.CancelTestTitle,
+            EducationalMessages.CancelTestIntro, EducationalMessages.CancelReasonAbandoned,
             EducationalMessages.CancelReasonTechnical, EducationalMessages.CancelReasonInterrupted,
-            EducationalMessages.ExperimentKeepGoing, EducationalMessages.ExperimentRetry,
-            EducationalMessages.ExperimentCloseAction, EducationalMessages.ExperimentBack,
-            EducationalMessages.ExperimentCompleted, EducationalMessages.ExperimentCompletedDetail,
-            EducationalMessages.ExperimentCancelled, EducationalMessages.ExperimentCancelledDetail,
-            EducationalMessages.ExperimentPrivacy, EducationalMessages.ExperimentCompletionRejected,
-            EducationalMessages.ExperimentRestoring, EducationalMessages.ExperimentCancelling,
-            EducationalMessages.LogoutDuringExperiment,
-            EducationalMessages.textCounter(12, 10_000), EducationalMessages.elapsedDescription("1:05"),
+            EducationalMessages.KeepGoing, EducationalMessages.Cancelling,
+            EducationalMessages.TestCompleted, EducationalMessages.TestCancelled,
+            EducationalMessages.ClockLost, EducationalMessages.BackHome, EducationalMessages.Back,
+            EducationalMessages.LogoutDuringTest, EducationalMessages.testsWithPending(0),
+            EducationalMessages.testsWithPending(1), EducationalMessages.testsWithPending(2),
+            EducationalMessages.testInProgress(2, 3), EducationalMessages.testStatusLabel("PENDING"),
         ) + SentenceAssistance.entries.map { EducationalMessages.assistanceLabel(it) } +
             AttemptCancelReason.entries.map { EducationalMessages.cancelReasonLabel(it) } +
             networkErrors.map { EducationalMessages.login(it) } +

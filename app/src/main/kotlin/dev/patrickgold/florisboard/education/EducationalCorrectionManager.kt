@@ -68,8 +68,8 @@ class EducationalCorrectionManager(context: Context) {
         },
         onSuccess = { newSession ->
             persistSession(newSession)
-            // Una prueba en curso (o una oración a medias en el borrador) sigue ahí; un borrador
-            // de otra cuenta lo descarta el propio resume().
+            // Una prueba en curso (o una oración a medias en el borrador) sigue ahí; lo que fuera
+            // de otra cuenta en el mismo teléfono lo descarta el propio resume().
             tests.resume()
         },
     )
@@ -195,7 +195,7 @@ class EducationalCorrectionManager(context: Context) {
 
         // Oración sin ayuda: se avisa y no se toca el backend (que lo revalida).
         if (!tests.correctionAllowed()) {
-            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInTask, NoticeKind.INFO), NOTICE_MS)
+            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInSentence, NoticeKind.INFO), NOTICE_MS)
             return
         }
 
@@ -236,10 +236,10 @@ class EducationalCorrectionManager(context: Context) {
     private fun runCorrection(extractedText: ExtractedEducationalText) {
         // Se repite aquí (además de en requestCorrection) para cubrir retryCorrection: un
         // reintento tras un error no debe poder llegar al backend si mientras tanto la
-        // oración pasó a UNASSISTED o se terminó. Ver docs/ux-smoke-test.md, Task 5:
-        // "IA en UNASSISTED y Reintentar tras error: ningún request llega al backend".
+        // oración pasó a "sin ayuda" o se terminó. Ver docs/ux-smoke-test.md, "Pruebas de
+        // oraciones": IA en una oración sin ayuda y Reintentar tras error no llegan al backend.
         if (!tests.correctionAllowed()) {
-            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInTask, NoticeKind.INFO), NOTICE_MS)
+            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInSentence, NoticeKind.INFO), NOTICE_MS)
             return
         }
         val processing = EducationalCorrectionState.Processing(extractedText, SystemClock.elapsedRealtime())
@@ -358,6 +358,22 @@ class EducationalCorrectionManager(context: Context) {
         }
     }
 
+    /**
+     * Terminar la oración de una prueba. Los globos abiertos se cierran antes: sugerencias sin
+     * elegir cuentan como rechazadas ([ignoreSuggestion]), una edición en curso se cierra como
+     * "Listo" ([finishEdit]), una corrección aplicada se queda aplicada. Con una corrección en
+     * vuelo no se termina (la pantalla deshabilita Terminar con "Corrigiendo…" mientras tanto).
+     */
+    fun finishSentence() {
+        when (_state.value) {
+            is EducationalCorrectionState.Processing -> return
+            is EducationalCorrectionState.ShowingSuggestions -> ignoreSuggestion()
+            is EducationalCorrectionState.EditingInPlace -> finishEdit()
+            else -> reset()
+        }
+        tests.finish()
+    }
+
     /** Cierra avisos y errores; no interrumpe una petición en curso. */
     fun dismiss() {
         when (_state.value) {
@@ -468,13 +484,6 @@ class EducationalCorrectionManager(context: Context) {
 }
 
 private const val PREWARM_DEBOUNCE_MS = 2 * 60 * 1000L // 2 minutos
-
-/**
- * Gate puro del botón IA según la condición de la oración en curso: solo `UNASSISTED` bloquea,
- * con el aviso que ve el alumno; sin oración (null) o `ASSISTED` no hay bloqueo.
- */
-internal fun correctionBlockMessage(assistance: SentenceAssistance?): String? =
-    if (assistance == SentenceAssistance.UNASSISTED) EducationalMessages.CorrectionDisabledInTask else null
 
 // URL del backend. Se define en build.gradle.kts (buildConfigField EDUCATION_BACKEND_BASE_URL).
 val EducationalBackendBaseUrls = listOf(

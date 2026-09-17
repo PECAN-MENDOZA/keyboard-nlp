@@ -361,7 +361,8 @@ class SentenceTestCoordinatorTest : FunSpec({
                     coordinator.finish()
                     awaitItem().shouldBeInstanceOf<SentenceTestState.Finishing>().position shouldBe 1
                     advanceUntilIdle()
-                    awaitItem() shouldBe SentenceTestState.AtSentence(attempt(next = 1), 2)
+                    // El intento del estado ya apunta a la oración actual (sin nextPosition viejo).
+                    awaitItem() shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
                 }
                 api.finished.single() shouldBe FinishSentenceRequest(
                     finalText = "hola",
@@ -422,7 +423,7 @@ class SentenceTestCoordinatorTest : FunSpec({
                     skipped = true,
                     completionKey = "key-1",
                 )
-                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 1), 2)
+                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
             }
         }
     }
@@ -455,7 +456,7 @@ class SentenceTestCoordinatorTest : FunSpec({
                 api.finished[1] shouldBe api.finished[0]
                 api.finished[1].completionKey shouldBe "key-1"
                 api.finished[1].finishedOffsetMs shouldBe 3_000
-                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 1), 2)
+                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
                 drafts.draft shouldBe null
             }
         }
@@ -490,6 +491,22 @@ class SentenceTestCoordinatorTest : FunSpec({
             }
         }
 
+        test("409 already finished on the last sentence: a 409 already completed lookup completes the attempt") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                api.finishResults += Result.failure(EducationalHttpException(409, """{"message":"Sentence already finished"}"""))
+                val drafts = FakeDraftStore()
+                val coordinator = writing(3, api, drafts = drafts)
+                api.startAttemptResult = Result.failure(EducationalHttpException(409, """{"message":"Test already completed"}"""))
+                coordinator.onTextChanged("fin")
+                coordinator.finish()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Completed(attempt(next = null))
+                coordinator.inProgress() shouldBe false
+                drafts.draft shouldBe null
+            }
+        }
+
         test("a 401 while finishing rejects the session and stays retryable") {
             runTest {
                 val api = FakeSentenceTestApi()
@@ -520,7 +537,7 @@ class SentenceTestCoordinatorTest : FunSpec({
                 coordinator.onTextChanged("fin")
                 coordinator.finish()
                 advanceUntilIdle()
-                coordinator.state.value shouldBe SentenceTestState.Completed(attempt(next = 3))
+                coordinator.state.value shouldBe SentenceTestState.Completed(attempt(next = null))
                 coordinator.inProgress() shouldBe false
                 coordinator.correctionAllowed() shouldBe true
                 drafts.draft shouldBe null
@@ -648,6 +665,60 @@ class SentenceTestCoordinatorTest : FunSpec({
             }
         }
 
+        test("another student logging in on the same phone never sees the previous sentence") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                val drafts = FakeDraftStore()
+                var current: EducationalSession? = session
+                api.startAttemptResult = Result.success(attempt(next = 1))
+                val coordinator = coordinator(api, drafts = drafts, currentSession = { current })
+                coordinator.loadTests()
+                advanceUntilIdle()
+                coordinator.start(assigned())
+                advanceUntilIdle()
+                coordinator.pressStart()
+                advanceUntilIdle()
+                coordinator.onTextChanged("texto de student_001")
+                drafts.draft?.ownerUserId shouldBe "student_001"
+
+                // student_001 pierde la sesión (401) y student_002 entra en el mismo teléfono.
+                current = null
+                coordinator.resume()
+                advanceUntilIdle()
+                coordinator.state.value.shouldBeInstanceOf<SentenceTestState.Writing>()
+                current = EducationalSession("student_002", "jwt-2", "2099-01-01T00:00:00Z")
+                api.assignedResult = Result.success(listOf(assigned()))
+                val calls = api.calls.size
+                coordinator.resume()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Idle
+                coordinator.inProgress() shouldBe false
+                coordinator.correctionAllowed() shouldBe true
+                drafts.draft shouldBe null
+                api.calls.drop(calls) shouldBe listOf("assigned")
+            }
+        }
+
+        test("the owner change also drops an operation in flight") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                var current: EducationalSession? = session
+                val coordinator = coordinator(api, currentSession = { current })
+                coordinator.loadTests()
+                // Sin avanzar: `assigned` sigue en vuelo cuando entra el otro alumno.
+                coordinator.state.value shouldBe SentenceTestState.LoadingTests
+                current = EducationalSession("student_002", "jwt-2", "2099-01-01T00:00:00Z")
+                api.assignedResult = Result.success(listOf(assigned("IN_PROGRESS")))
+                api.startAttemptResult = Result.success(attempt(next = 2))
+                coordinator.resume()
+                advanceUntilIdle()
+                // Solo cuenta la reanudación del segundo alumno (la lista del primero se canceló).
+                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
+                api.calls.last() shouldBe "startAttempt:test-1:1.2.3"
+                api.calls.count { it == "startAttempt:test-1:1.2.3" } shouldBe 1
+            }
+        }
+
         test("a failed cancel keeps the sentence with a transient error; a closed attempt counts as cancelled") {
             runTest {
                 val api = FakeSentenceTestApi()
@@ -705,9 +776,9 @@ class SentenceTestCoordinatorTest : FunSpec({
 
                 // Tras terminar, en AtSentence(2), los eventos vuelven a ignorarse.
                 coordinator.onSuggestionsOffered()
-                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 1), 2)
+                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
                 coordinator.onTextChanged("x")
-                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 1), 2)
+                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
             }
         }
     }

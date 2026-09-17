@@ -63,6 +63,16 @@ sealed interface SentenceTestState {
     data class Failed(val message: String) : SentenceTestState
 }
 
+/** Oración por resolver (posición y total de la prueba) mientras hay una en curso; null si no. */
+fun SentenceTestState.currentSentence(): Pair<Int, Int>? = when (this) {
+    is SentenceTestState.AtSentence -> position to attempt.sentenceCount
+    is SentenceTestState.Writing -> position to attempt.sentenceCount
+    is SentenceTestState.Finishing -> position to attempt.sentenceCount
+    is SentenceTestState.FinishFailed -> position to attempt.sentenceCount
+    is SentenceTestState.ClockLost -> position to attempt.sentenceCount
+    else -> null
+}
+
 /**
  * Máquina de estados de las pruebas de oraciones, sin Android, para probarla en JVM. Lista las
  * pruebas asignadas, inicia (o retoma) el intento, y por cada oración: Comenzar (`POST …/start`,
@@ -112,7 +122,10 @@ class SentenceTestCoordinator(
     private var job: Job? = null
     private val busy: Boolean get() = job?.isActive == true
 
-    /** Último alumno conocido: permite guardar el borrador aunque la sesión ya haya vencido. */
+    /**
+     * Último alumno conocido: permite guardar el borrador aunque la sesión ya haya vencido y
+     * detectar que entró otra cuenta en el mismo teléfono ([adoptSessionOwner]).
+     */
     private var lastOwnerUserId: String = ""
 
     /** Última lista recibida: a ella se vuelve si iniciar una prueba falla. */
@@ -130,14 +143,7 @@ class SentenceTestCoordinator(
     fun activeResponseId(): String? = writingAssisted()?.responseId
 
     /** Hay una oración por resolver: antes, durante o después (sin confirmar) de escribirla. */
-    fun inProgress(): Boolean = when (_state.value) {
-        is SentenceTestState.AtSentence,
-        is SentenceTestState.Writing,
-        is SentenceTestState.Finishing,
-        is SentenceTestState.FinishFailed,
-        is SentenceTestState.ClockLost -> true
-        else -> false
-    }
+    fun inProgress(): Boolean = _state.value.currentSentence() != null
 
     // --- Counters ------------------------------------------------------------------------------
 
@@ -161,8 +167,9 @@ class SentenceTestCoordinator(
      * directamente (el backend devuelve el intento existente con su `nextPosition`).
      */
     fun loadTests(): Unit = synchronized(lock) {
+        val current = adoptSessionOwner()
         if (busy || inProgress() || _state.value is SentenceTestState.Cancelling) return
-        val token = session()?.token
+        val token = current?.token
         if (token == null) {
             _state.value = SentenceTestState.Failed(EducationalMessages.NoSession)
             return
@@ -172,7 +179,7 @@ class SentenceTestCoordinator(
             api.assigned(token)
                 .onSuccess { tests ->
                     lastTests = tests
-                    val inProgress = tests.firstOrNull { it.status == StatusInProgress }
+                    val inProgress = tests.firstOrNull { it.isInProgress }
                     if (inProgress == null) transition(SentenceTestState.Choosing(tests)) else resumeAttempt(token, inProgress)
                 }
                 .onFailure { error -> transition(failed(error)) }
@@ -205,12 +212,14 @@ class SentenceTestCoordinator(
      * [SentenceTestState.ClockLost]; sin borrador → [SentenceTestState.AtSentence]. Sin prueba en
      * curso → [SentenceTestState.Idle]. Si la consulta falla se queda en `Idle` con [lastError];
      * el borrador se conserva para el siguiente intento.
+     *
+     * Otra cuenta en el mismo teléfono (el último alumno conocido no es el de la sesión): nada
+     * del anterior sobrevive, ni la oración en curso, ni la operación en vuelo ni el borrador.
      */
     fun resume(): Unit = synchronized(lock) {
+        val current = adoptSessionOwner() ?: return
         if (busy || inProgress() || _state.value is SentenceTestState.Cancelling) return
-        val current = session() ?: return
-        lastOwnerUserId = current.userId
-        // Otra cuenta en el mismo teléfono: el borrador no es de este alumno.
+        // Un borrador de otra cuenta (p. ej. de antes de este arranque) no es de este alumno.
         drafts.load()?.takeIf { it.ownerUserId != current.userId }?.let { drafts.clear() }
         val token = current.token
         _state.value = SentenceTestState.LoadingTests
@@ -218,7 +227,7 @@ class SentenceTestCoordinator(
             api.assigned(token)
                 .onSuccess { tests ->
                     lastTests = tests
-                    val inProgress = tests.firstOrNull { it.status == StatusInProgress }
+                    val inProgress = tests.firstOrNull { it.isInProgress }
                     if (inProgress == null) transition(SentenceTestState.Idle) { drafts.clear() } else resumeAttempt(token, inProgress)
                 }
                 .onFailure { error -> transition(SentenceTestState.Idle) { reportError(error) } }
@@ -301,9 +310,10 @@ class SentenceTestCoordinator(
     /**
      * `PUT …/responses/{position}`. Éxito → siguiente oración o [SentenceTestState.Completed]
      * (borrador fuera). Un `409 "Sentence already finished"` (el backend ya la tiene con otra
-     * clave) es éxito lógico: se pide el intento para saber la siguiente posición. Cualquier otro
-     * fallo → [SentenceTestState.FinishFailed], reintentable con red, 5xx o 401 (tras volver a
-     * entrar se reenvía igual).
+     * clave) es éxito lógico: se pide el intento para saber la siguiente posición; si esa era la
+     * última oración el backend responde `409 "Test already completed"`, que también es éxito
+     * ([SentenceTestState.Completed]). Cualquier otro fallo → [SentenceTestState.FinishFailed],
+     * reintentable con red, 5xx o 401 (tras volver a entrar se reenvía igual).
      */
     private fun launchFinish(attempt: AttemptResponse, position: Int, pending: FinishSentenceRequest) {
         val token = session()?.token
@@ -321,7 +331,9 @@ class SentenceTestCoordinator(
                     if (error.isAlreadyFinished()) {
                         api.startAttempt(token, attempt.testId, appVersion)
                             .onSuccess { refreshed -> advance(refreshed, refreshed.nextPosition) }
-                            .onFailure { e -> transition(finishFailed(attempt, position, pending, e)) }
+                            .onFailure { e ->
+                                if (e.isAlreadyCompleted()) advance(attempt, null) else transition(finishFailed(attempt, position, pending, e))
+                            }
                     } else {
                         transition(finishFailed(attempt, position, pending, error))
                     }
@@ -381,6 +393,10 @@ class SentenceTestCoordinator(
 
     /** Cierre de sesión: olvida todo, incluida una operación en vuelo y el borrador en disco. */
     fun clear(): Unit = synchronized(lock) {
+        forgetPreviousOwner()
+    }
+
+    private fun forgetPreviousOwner() {
         job?.cancel()
         job = null
         lastTests = emptyList()
@@ -446,10 +462,25 @@ class SentenceTestCoordinator(
         }
     }
 
-    /** Oración confirmada: siguiente oración o prueba completada; el borrador ya no hace falta. */
+    /**
+     * Oración confirmada: siguiente oración o prueba completada; el borrador ya no hace falta.
+     * El intento que llevan los estados refleja la posición actual (no la de cuando se pidió).
+     */
     private fun advance(attempt: AttemptResponse, next: Int?) {
-        val state = if (next == null) SentenceTestState.Completed(attempt) else SentenceTestState.AtSentence(attempt, next)
+        val refreshed = attempt.copy(nextPosition = next)
+        val state = if (next == null) SentenceTestState.Completed(refreshed) else SentenceTestState.AtSentence(refreshed, next)
         transition(state) { drafts.clear() }
+    }
+
+    /**
+     * Sesión actual (null si no hay) tomando nota de su alumno. Si es otro alumno que el último
+     * conocido (otra cuenta en el mismo teléfono) se olvida todo lo del anterior antes de seguir.
+     */
+    private fun adoptSessionOwner(): EducationalSession? {
+        val current = session() ?: return null
+        if (lastOwnerUserId.isNotEmpty() && lastOwnerUserId != current.userId) forgetPreviousOwner()
+        lastOwnerUserId = current.userId
+        return current
     }
 
     private fun ownerUserId(): String {
@@ -510,11 +541,15 @@ class SentenceTestCoordinator(
     private fun Throwable.isAlreadyFinished(): Boolean =
         this is EducationalHttpException && status == 409 && body.contains(AlreadyFinished, ignoreCase = true)
 
+    /** Tras la última oración el intento ya está cerrado: `startAttempt` no puede devolverlo. */
+    private fun Throwable.isAlreadyCompleted(): Boolean =
+        this is EducationalHttpException && status == 409 && body.contains(AlreadyCompleted, ignoreCase = true)
+
     companion object {
         /** `bootId` cuando el teléfono no expone `boot_count`: nunca cuenta como "el mismo arranque". */
         const val UnknownBootId = "unknown"
-        private const val StatusInProgress = "IN_PROGRESS"
         private const val AlreadyFinished = "already finished"
+        private const val AlreadyCompleted = "already completed"
         private val TerminalCancelStatuses = setOf(400, 404, 409)
     }
 }

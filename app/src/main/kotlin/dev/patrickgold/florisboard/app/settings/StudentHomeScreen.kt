@@ -64,6 +64,8 @@ import dev.patrickgold.florisboard.app.Routes
 import dev.patrickgold.florisboard.education.EducationalBackendConnectionState
 import dev.patrickgold.florisboard.education.EducationalMessages
 import dev.patrickgold.florisboard.education.LoginState
+import dev.patrickgold.florisboard.education.SentenceTestState
+import dev.patrickgold.florisboard.education.currentSentence
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.florisboard.lib.util.InputMethodUtils
@@ -109,6 +111,8 @@ fun StudentHomeScreen() = FlorisScreen {
             )
         }
 
+        val testState by manager.tests.state.collectAsState()
+
         if (activeSession == null) {
             LoginSection(
                 loginState = manager.loginState.collectAsState().value,
@@ -119,7 +123,9 @@ fun StudentHomeScreen() = FlorisScreen {
                 alias = activeSession.username.ifBlank { activeSession.userId },
                 connectionState = manager.connectionState.collectAsState().value,
                 onCheckConnection = manager::checkBackendConnection,
-                onJoinExperiment = { navController.navigate(Routes.Settings.Experiment) },
+                testState = testState,
+                onOpenTests = { navController.navigate(Routes.Settings.Tests) },
+                onOpenSentence = { navController.navigate(Routes.Settings.TestSentence) },
             )
         }
 
@@ -131,8 +137,7 @@ fun StudentHomeScreen() = FlorisScreen {
 
         if (activeSession != null) {
             // Hay una oración por resolver: cerrar sesión pide confirmar (se perdería lo no guardado).
-            val testState by manager.tests.state.collectAsState()
-            val testInProgress = remember(testState) { manager.tests.inProgress() }
+            val testInProgress = testState.currentSentence() != null
             var confirmLogout by remember { mutableStateOf(false) }
             OutlinedButton(
                 onClick = { if (testInProgress) confirmLogout = true else manager.logout() },
@@ -161,7 +166,7 @@ private fun LogoutConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(EducationalMessages.Logout) },
-        text = { Text(EducationalMessages.LogoutDuringExperiment) },
+        text = { Text(EducationalMessages.LogoutDuringTest) },
         confirmButton = {
             TextButton(onClick = onConfirm, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(EducationalMessages.Logout)
@@ -169,7 +174,7 @@ private fun LogoutConfirmDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
         },
         dismissButton = {
             TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 48.dp)) {
-                Text(EducationalMessages.ExperimentBack)
+                Text(EducationalMessages.Back)
             }
         },
     )
@@ -254,7 +259,9 @@ private fun AccountSection(
     alias: String,
     connectionState: EducationalBackendConnectionState,
     onCheckConnection: () -> Unit,
-    onJoinExperiment: () -> Unit,
+    testState: SentenceTestState,
+    onOpenTests: () -> Unit,
+    onOpenSentence: () -> Unit,
 ) {
     LaunchedEffect(Unit) {
         if (connectionState is EducationalBackendConnectionState.Unknown) onCheckConnection()
@@ -300,14 +307,22 @@ private fun AccountSection(
             }
         }
         Spacer(Modifier.height(12.dp))
-        // Solo con sesión válida: la pantalla de la prueba exige cuenta de alumno.
+        // Solo con sesión válida: las pruebas exigen cuenta de alumno. Con una oración por
+        // resolver el botón lleva directo a ella; si no, a la lista (con las pendientes si ya
+        // se listaron).
+        val sentence = testState.currentSentence()
+        val testsLabel = when {
+            sentence != null -> EducationalMessages.testInProgress(sentence.first, sentence.second)
+            testState is SentenceTestState.Choosing -> EducationalMessages.testsWithPending(testState.tests.count { it.isPending })
+            else -> EducationalMessages.TestsTitle
+        }
         Button(
-            onClick = onJoinExperiment,
+            onClick = if (sentence != null) onOpenSentence else onOpenTests,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 48.dp),
         ) {
-            Text(EducationalMessages.ExperimentTitle)
+            Text(testsLabel)
         }
     }
 }

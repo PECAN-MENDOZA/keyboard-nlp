@@ -153,8 +153,8 @@ data class CorrectionFeedbackRequest(
     // la sugerencia tal cual. El backend clasifica como "editada" si difiere de la sugerencia base.
     @SerialName("texto_final")
     val finalText: String? = null,
-    // Motivo opcional de un segundo feedback sobre la misma sesión ("UNDO"). El backend actual
-    // lo ignora; el plan del modo experimental lo registra como evento.
+    // Motivo opcional de un segundo feedback sobre la misma sesión ("UNDO"). El backend lo
+    // ignora; en una prueba de oraciones el deshacer se cuenta aparte (`suggestionsUndone`).
     @SerialName("motivo")
     val reason: String? = null,
 )
