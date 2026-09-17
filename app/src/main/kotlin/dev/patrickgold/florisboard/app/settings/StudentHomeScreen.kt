@@ -64,7 +64,6 @@ import dev.patrickgold.florisboard.app.Routes
 import dev.patrickgold.florisboard.education.EducationalBackendConnectionState
 import dev.patrickgold.florisboard.education.EducationalMessages
 import dev.patrickgold.florisboard.education.LoginState
-import dev.patrickgold.florisboard.education.logoutNeedsConfirmation
 import dev.patrickgold.florisboard.educationalCorrectionManager
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.florisboard.lib.util.InputMethodUtils
@@ -131,10 +130,12 @@ fun StudentHomeScreen() = FlorisScreen {
         )
 
         if (activeSession != null) {
-            val experimentState by manager.experiment.state.collectAsState()
+            // Hay una oración por resolver: cerrar sesión pide confirmar (se perdería lo no guardado).
+            val testState by manager.tests.state.collectAsState()
+            val testInProgress = remember(testState) { manager.tests.inProgress() }
             var confirmLogout by remember { mutableStateOf(false) }
             OutlinedButton(
-                onClick = { if (logoutNeedsConfirmation(experimentState)) confirmLogout = true else manager.logout() },
+                onClick = { if (testInProgress) confirmLogout = true else manager.logout() },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp),

@@ -21,15 +21,15 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldNotContainIgnoringCase
 
 class EducationalCorrectionGateTest : FunSpec({
-    test("only unassisted experiment blocks IA") {
+    test("only an unassisted sentence blocks IA") {
         correctionBlockMessage(null) shouldBe null
-        correctionBlockMessage(ExperimentCondition.ASSISTED) shouldBe null
-        correctionBlockMessage(ExperimentCondition.UNASSISTED) shouldBe
+        correctionBlockMessage(SentenceAssistance.ASSISTED) shouldBe null
+        correctionBlockMessage(SentenceAssistance.UNASSISTED) shouldBe
             "La corrección está desactivada en esta tarea."
     }
 
     test("the block message is the shared constant and mentions no infrastructure") {
-        correctionBlockMessage(ExperimentCondition.UNASSISTED) shouldBe EducationalMessages.CorrectionDisabledInTask
+        correctionBlockMessage(SentenceAssistance.UNASSISTED) shouldBe EducationalMessages.CorrectionDisabledInTask
         EducationalMessages.CorrectionDisabledInTask shouldNotContainIgnoringCase "cloud run"
         EducationalMessages.CorrectionDisabledInTask shouldNotContainIgnoringCase "backend"
         EducationalMessages.CorrectionDisabledInTask shouldNotContainIgnoringCase "desplegado"

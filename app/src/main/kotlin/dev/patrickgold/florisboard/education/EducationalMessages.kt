@@ -41,9 +41,7 @@ object EducationalMessages {
     const val Corrected = "Corregido"
     const val Editing = "Editando"
 
-    // Experimento
-    const val InvalidAccessCode = "Ese código no sirve. Pídele uno nuevo al investigador."
-    const val TimerLost = "El cronómetro se perdió al reiniciar el teléfono. Cancela la prueba y pide un código nuevo."
+    // Pruebas (los textos de la pantalla del experimento se retiran con ella en la Task 10)
     const val CorrectionDisabledInTask = "La corrección está desactivada en esta tarea."
     const val ExperimentTitle = "Participar en una prueba"
     const val ExperimentNoSession =
@@ -87,22 +85,19 @@ object EducationalMessages {
     const val ExperimentCompletionRejected = "No se pudo enviar tu texto. Revisa que hayas escrito algo e inténtalo de nuevo."
     const val ExperimentRestoring = "Comprobando tu prueba…"
     const val ExperimentCancelling = "Cancelando la prueba…"
-    const val ExperimentNotActive = "Esta prueba ya no está activa. Avisa al investigador."
-    const val ExperimentCompletionPending = "No pudimos confirmar que tu texto se guardó. Toca Reintentar."
-    const val ExperimentCompletionConflict = "No pudimos guardar tu texto. Toca Reintentar."
-    const val ExperimentCancelPending = "No pudimos confirmar la cancelación. Toca Reintentar."
+    const val TestConflict = "No se pudo continuar con la prueba. Avisa a tu profesor."
     const val LogoutDuringExperiment =
         "Tienes una prueba en curso. Si cierras sesión se perderá el texto que no se haya guardado."
 
-    fun conditionLabel(condition: ExperimentCondition): String = when (condition) {
-        ExperimentCondition.ASSISTED -> ConditionAssisted
-        ExperimentCondition.UNASSISTED -> ConditionUnassisted
+    fun assistanceLabel(assistance: SentenceAssistance): String = when (assistance) {
+        SentenceAssistance.ASSISTED -> ConditionAssisted
+        SentenceAssistance.UNASSISTED -> ConditionUnassisted
     }
 
-    fun cancelReasonLabel(reason: CancelReason): String = when (reason) {
-        CancelReason.ABANDONED -> CancelReasonAbandoned
-        CancelReason.TECHNICAL_PROBLEM -> CancelReasonTechnical
-        CancelReason.INTERRUPTED -> CancelReasonInterrupted
+    fun cancelReasonLabel(reason: AttemptCancelReason): String = when (reason) {
+        AttemptCancelReason.ABANDONED -> CancelReasonAbandoned
+        AttemptCancelReason.TECHNICAL_PROBLEM -> CancelReasonTechnical
+        AttemptCancelReason.INTERRUPTED -> CancelReasonInterrupted
     }
 
     fun textCounter(length: Int, max: Int): String = "$length / $max"
@@ -177,20 +172,16 @@ object EducationalMessages {
     }
 
     /**
-     * Errores del experimento según la operación: un 400 al canjear es un código inválido, pero
-     * al iniciar/finalizar/cancelar significa que la ejecución ya no está activa (el alumno no
-     * tiene ningún código que corregir).
+     * Errores de las pruebas de oraciones. Un 409 es un conflicto de estado de la prueba (otra en
+     * curso, ya completada, oración fuera de orden…): el alumno no puede arreglarlo, avisa al
+     * profesor; un 404 es una prueba que ya no existe.
      */
-    fun experiment(error: Throwable, op: ExperimentOp): String = when (error) {
+    fun sentenceTest(error: Throwable): String = when (error) {
         is EducationalHttpException -> when (error.status) {
-            400 -> when (op) {
-                ExperimentOp.REDEEM -> InvalidAccessCode
-                ExperimentOp.START, ExperimentOp.COMPLETE, ExperimentOp.CANCEL -> ExperimentNotActive
-                ExperimentOp.RESTORE -> "No se pudo continuar con la prueba (código ${error.status})."
-            }
             401 -> SessionExpired
             404 -> "Esa prueba ya no está disponible."
-            409 -> ExperimentCompletionConflict
+            409 -> TestConflict
+            in 500..599 -> "El servidor tuvo un problema. Inténtalo en unos minutos."
             else -> "No se pudo continuar con la prueba (código ${error.status})."
         }
         else -> if (error.isNetworkFailure()) {
@@ -210,6 +201,3 @@ object EducationalMessages {
         this is ConnectException || this is NoRouteToHostException ||
             this is SocketTimeoutException || this is UnknownHostException
 }
-
-/** Operación del experimento que falló; decide el texto de un 400 en [EducationalMessages.experiment]. */
-enum class ExperimentOp { REDEEM, START, COMPLETE, CANCEL, RESTORE }

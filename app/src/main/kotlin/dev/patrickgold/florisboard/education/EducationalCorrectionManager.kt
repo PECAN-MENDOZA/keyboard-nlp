@@ -43,9 +43,8 @@ class EducationalCorrectionManager(context: Context) {
     private val prefs by FlorisPreferenceStore
     private var lastPrewarmAtMs: Long = 0L
     private var autoDismissJob: Job? = null
-    // Envíos de feedback en orden; `completeExperiment` los drena antes de finalizar.
+    // Envíos de feedback en orden (aceptar antes que UNDO, aunque la primera petición sea lenta).
     private val feedbackQueue = FeedbackQueue(scope)
-    private val draftStore = PrefsExperimentDraftStore(appContext)
 
     private val _state = MutableStateFlow<EducationalCorrectionState>(EducationalCorrectionState.Idle)
     val state: StateFlow<EducationalCorrectionState> = _state
@@ -69,55 +68,28 @@ class EducationalCorrectionManager(context: Context) {
         },
         onSuccess = { newSession ->
             persistSession(newSession)
-            // Otra cuenta en el mismo teléfono: el borrador de la anterior no es de este alumno (el
-            // marcador lo descarta el propio restore()). La ejecución anterior sigue en el backend.
-            // Un borrador sin dueño (versión anterior) se adopta.
-            if (!experimentDraftBelongsTo(draftStore.ownerUserId(), newSession.userId)) draftStore.clear()
-            // Con la misma cuenta, una ejecución pendiente (o una finalización que falló por
-            // sesión vencida) sigue ahí.
-            experiment.restore()
+            // Una prueba en curso (o una oración a medias en el borrador) sigue ahí; un borrador
+            // de otra cuenta lo descarta el propio resume().
+            tests.resume()
         },
     )
     val loginState: StateFlow<LoginState> = loginFlow.state
 
     /**
-     * Escritura controlada (experimento). Sin ejecución activa la corrección funciona como siempre;
-     * en `UNASSISTED` [requestCorrection] avisa y no llama al backend; en `ASSISTED` la corrección
-     * lleva `id_ejecucion`. Sobrevive a una sesión vencida (la finalización pendiente se reenvía
-     * tras volver a entrar); solo [logout] o el login de otra cuenta lo borran. Un 401 del backend
-     * cierra la sesión local (no el coordinador): el inicio muestra el login y, al entrar, se
-     * reanuda con el mismo payload. El cronómetro arranca desde la primera modificación del campo
-     * de la tarea (la pantalla llama a `markFirstKey()`), nunca desde el teclado en otra pantalla
-     * u otra app.
+     * Pruebas de oraciones. Sin prueba en curso la corrección funciona como siempre; escribiendo
+     * una oración `UNASSISTED` [requestCorrection] avisa y no llama al backend; en `ASSISTED` la
+     * corrección lleva `id_respuesta`. Un 401 del backend cierra la sesión local (no el
+     * coordinador): el inicio muestra el login y, al entrar, se reanuda con el mismo borrador.
      */
-    val experiment = EducationalExperimentCoordinator(
+    val tests = SentenceTestCoordinator(
         scope = scope,
-        api = RepositoryExperimentApi(repository, EducationalBackendBaseUrls),
+        api = RepositorySentenceTestApi(repository, EducationalBackendBaseUrls),
         session = { currentSession() },
         elapsedRealtime = SystemClock::elapsedRealtime,
         appVersion = BuildConfig.VERSION_NAME,
-        store = PrefsExperimentMarkerStore(appContext),
-        bootId = { PrefsExperimentMarkerStore.bootId(appContext) },
+        drafts = PrefsSentenceTestDraftStore(appContext),
+        bootId = { PrefsSentenceTestDraftStore.bootId(appContext) },
         onSessionRejected = { clearSession() },
-    )
-
-    // "Finalizar y guardar": cierra la tira, congela la frontera, drena el feedback y envía.
-    private val finisher = ExperimentFinisher(
-        scope = scope,
-        strip = object : ExperimentFinisher.CorrectionStrip {
-            override fun openCorrection() = when (_state.value) {
-                is EducationalCorrectionState.Processing -> ExperimentFinisher.OpenCorrection.PROCESSING
-                is EducationalCorrectionState.ShowingSuggestions -> ExperimentFinisher.OpenCorrection.SUGGESTIONS
-                is EducationalCorrectionState.Applied -> ExperimentFinisher.OpenCorrection.APPLIED
-                is EducationalCorrectionState.EditingInPlace -> ExperimentFinisher.OpenCorrection.EDITING
-                else -> ExperimentFinisher.OpenCorrection.NONE
-            }
-            override fun ignoreSuggestion() = this@EducationalCorrectionManager.ignoreSuggestion()
-            override fun finishEdit() = this@EducationalCorrectionManager.finishEdit()
-            override fun dismiss() = this@EducationalCorrectionManager.dismiss()
-        },
-        feedbackQueue = feedbackQueue,
-        experiment = experiment,
     )
 
     init {
@@ -125,8 +97,8 @@ class EducationalCorrectionManager(context: Context) {
         scope.launch {
             editorInstance.activeContentFlow.collect { content -> onContentChanged(content) }
         }
-        // Tras una muerte del proceso, el gate y las pantallas deben reflejar la ejecución vigente.
-        if (currentSession() != null) experiment.restore()
+        // Tras una muerte del proceso, el gate y las pantallas deben reflejar la prueba en curso.
+        if (currentSession() != null) tests.resume()
     }
 
     private fun loadValidSession(): EducationalSession? {
@@ -156,8 +128,7 @@ class EducationalCorrectionManager(context: Context) {
     fun logout() {
         clearSession()
         loginFlow.reset()
-        experiment.clear()
-        draftStore.clear()
+        tests.clear()
         reset()
         _connectionState.value = EducationalBackendConnectionState.Unknown
     }
@@ -216,22 +187,14 @@ class EducationalCorrectionManager(context: Context) {
         if (_state.value is EducationalCorrectionState.EditingInPlace) finishEdit() else reset()
     }
 
-    /**
-     * "Finalizar y guardar": cierra la sugerencia que siga abierta (rechazo) o la edición en curso
-     * (su feedback se encola), congela texto y duración en el coordinador en ese mismo instante,
-     * espera a que TODO el feedback pendiente llegue al backend y solo entonces envía la
-     * finalización congelada. Con una corrección procesándose no finaliza. Ver [ExperimentFinisher].
-     */
-    suspend fun completeExperiment(text: String): Boolean = finisher.finish(text)
-
     // ---- Solicitud ------------------------------------------------------------------------
 
     fun requestCorrection() {
         if (_state.value is EducationalCorrectionState.Processing) return
         if (_state.value is EducationalCorrectionState.EditingInPlace) finishEdit()
 
-        // Escritura controlada sin asistencia: se avisa y no se toca el backend (que lo revalida).
-        if (!experiment.correctionAllowed()) {
+        // Oración sin ayuda: se avisa y no se toca el backend (que lo revalida).
+        if (!tests.correctionAllowed()) {
             show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInTask, NoticeKind.INFO), NOTICE_MS)
             return
         }
@@ -273,9 +236,9 @@ class EducationalCorrectionManager(context: Context) {
     private fun runCorrection(extractedText: ExtractedEducationalText) {
         // Se repite aquí (además de en requestCorrection) para cubrir retryCorrection: un
         // reintento tras un error no debe poder llegar al backend si mientras tanto la
-        // ejecución pasó a UNASSISTED o cruzó el límite. Ver docs/ux-smoke-test.md, Task 5:
+        // oración pasó a UNASSISTED o se terminó. Ver docs/ux-smoke-test.md, Task 5:
         // "IA en UNASSISTED y Reintentar tras error: ningún request llega al backend".
-        if (!experiment.correctionAllowed()) {
+        if (!tests.correctionAllowed()) {
             show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInTask, NoticeKind.INFO), NOTICE_MS)
             return
         }
@@ -293,8 +256,7 @@ class EducationalCorrectionManager(context: Context) {
                     baseUrl = baseUrl,
                     token = activeSession.token,
                     text = extractedText.text,
-                    // TODO Task 10: enlazar con el coordinador de pruebas de oraciones.
-                    testResponseId = null,
+                    testResponseId = tests.activeResponseId(),
                 )
             }
             // Si mientras tanto cambió el campo o el alumno cerró, la respuesta ya no interesa.
@@ -305,6 +267,7 @@ class EducationalCorrectionManager(context: Context) {
                     show(EducationalCorrectionState.Notice(EducationalMessages.AlreadyCorrect, NoticeKind.SUCCESS), NOTICE_SHORT_MS)
                     sendFeedback(response, selectedSuggestion = null, accepted = false)
                 } else {
+                    tests.onSuggestionsOffered()
                     show(EducationalCorrectionState.ShowingSuggestions(extractedText, response))
                 }
             }.onFailure { error ->
@@ -324,6 +287,7 @@ class EducationalCorrectionManager(context: Context) {
         val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: return
         val anchor = replaceSelection(current.extractedText, option.text) ?: return
         sendFeedback(current.response, selectedSuggestion = option.text, accepted = true)
+        tests.onSuggestionAccepted()
         show(EducationalCorrectionState.Applied(current.extractedText, current.response, option.text, anchor), UNDO_MS)
     }
 
@@ -347,6 +311,7 @@ class EducationalCorrectionManager(context: Context) {
     fun ignoreSuggestion() {
         val current = _state.value as? EducationalCorrectionState.ShowingSuggestions ?: run { dismiss(); return }
         sendFeedback(current.response, selectedSuggestion = null, accepted = false)
+        tests.onSuggestionRejected()
         reset()
     }
 
@@ -360,6 +325,7 @@ class EducationalCorrectionManager(context: Context) {
             accepted = true,
             finalText = finalText.takeIf { it != current.baseSuggestion },
         )
+        tests.onSuggestionAccepted()
         reset()
     }
 
@@ -373,6 +339,7 @@ class EducationalCorrectionManager(context: Context) {
                     return
                 }
                 sendFeedback(current.response, selectedSuggestion = null, accepted = false, reason = REASON_UNDO)
+                tests.onSuggestionUndone()
                 reset()
             }
             is EducationalCorrectionState.EditingInPlace -> {
@@ -384,6 +351,7 @@ class EducationalCorrectionManager(context: Context) {
                     return
                 }
                 sendFeedback(current.response, selectedSuggestion = null, accepted = false, reason = REASON_UNDO)
+                tests.onSuggestionUndone()
                 reset()
             }
             else -> Unit
@@ -502,11 +470,11 @@ class EducationalCorrectionManager(context: Context) {
 private const val PREWARM_DEBOUNCE_MS = 2 * 60 * 1000L // 2 minutos
 
 /**
- * Gate puro del botón IA según la condición de la ejecución activa: solo `UNASSISTED` bloquea,
- * con el aviso que ve el alumno; sin ejecución (null) o `ASSISTED` no hay bloqueo.
+ * Gate puro del botón IA según la condición de la oración en curso: solo `UNASSISTED` bloquea,
+ * con el aviso que ve el alumno; sin oración (null) o `ASSISTED` no hay bloqueo.
  */
-internal fun correctionBlockMessage(condition: ExperimentCondition?): String? =
-    if (condition == ExperimentCondition.UNASSISTED) EducationalMessages.CorrectionDisabledInTask else null
+internal fun correctionBlockMessage(assistance: SentenceAssistance?): String? =
+    if (assistance == SentenceAssistance.UNASSISTED) EducationalMessages.CorrectionDisabledInTask else null
 
 // URL del backend. Se define en build.gradle.kts (buildConfigField EDUCATION_BACKEND_BASE_URL).
 val EducationalBackendBaseUrls = listOf(
