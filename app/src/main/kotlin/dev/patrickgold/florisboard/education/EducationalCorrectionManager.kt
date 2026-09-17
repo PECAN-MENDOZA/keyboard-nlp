@@ -293,8 +293,8 @@ class EducationalCorrectionManager(context: Context) {
                     baseUrl = baseUrl,
                     token = activeSession.token,
                     text = extractedText.text,
-                    // Solo en una ejecución ASSISTED activa; null en uso normal.
-                    experimentRunId = experiment.activeRunId(),
+                    // TODO Task 10: enlazar con el coordinador de pruebas de oraciones.
+                    testResponseId = null,
                 )
             }
             // Si mientras tanto cambió el campo o el alumno cerró, la respuesta ya no interesa.

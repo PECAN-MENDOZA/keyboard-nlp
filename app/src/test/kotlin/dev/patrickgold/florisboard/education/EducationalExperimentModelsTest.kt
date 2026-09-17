@@ -25,14 +25,14 @@ import kotlinx.serialization.json.Json
 class EducationalExperimentModelsTest : FunSpec({
     val json = Json { encodeDefaults = true }
 
-    test("correction without experiment stays normal") {
+    test("correction without a sentence test response stays normal") {
         json.encodeToString(ProcessCorrectionRequest("texto")) shouldBe
-            "{\"texto_original\":\"texto\",\"id_ejecucion\":null}"
+            "{\"texto_original\":\"texto\",\"id_respuesta\":null}"
     }
 
-    test("correction with an active experiment run carries id_ejecucion") {
-        json.encodeToString(ProcessCorrectionRequest("texto", "run-1")) shouldBe
-            "{\"texto_original\":\"texto\",\"id_ejecucion\":\"run-1\"}"
+    test("correction inside an active sentence test carries id_respuesta") {
+        json.encodeToString(ProcessCorrectionRequest("texto", "response-1")) shouldBe
+            "{\"texto_original\":\"texto\",\"id_respuesta\":\"response-1\"}"
     }
 
     test("redeem access code request serializes the code") {

@@ -75,9 +75,9 @@ data class StudentLoginResponse(
 data class ProcessCorrectionRequest(
     @SerialName("texto_original")
     val originalText: String,
-    // Solo se envía en una ejecución experimental ASSISTED y ACTIVE.
-    @SerialName("id_ejecucion")
-    val experimentRunId: String? = null,
+    // Solo se envía cuando la corrección ocurre dentro de una prueba de oraciones activa.
+    @SerialName("id_respuesta")
+    val testResponseId: String? = null,
 )
 
 @Serializable

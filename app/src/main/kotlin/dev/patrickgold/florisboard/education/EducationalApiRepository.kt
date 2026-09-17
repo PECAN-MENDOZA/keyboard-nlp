@@ -28,6 +28,9 @@ class EducationalApiRepository {
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true
+        // El backend espera `firstKeyOffsetMs` explícito como `null` (no ausente) cuando el
+        // alumno nunca escribió; kotlinx.serialization ya lo hace por defecto, se deja explícito.
+        explicitNulls = true
     }
 
     suspend fun login(
@@ -58,7 +61,7 @@ class EducationalApiRepository {
         baseUrl: String,
         token: String,
         text: String,
-        experimentRunId: String? = null,
+        testResponseId: String? = null,
     ): Result<CorrectionSessionResponse> = withContext(Dispatchers.IO) {
         runCatching {
             val response = request(
@@ -66,9 +69,103 @@ class EducationalApiRepository {
                 path = "/corrections/process",
                 method = "POST",
                 token = token,
-                body = json.encodeToString(ProcessCorrectionRequest(text, experimentRunId)),
+                body = json.encodeToString(ProcessCorrectionRequest(text, testResponseId)),
             )
             json.decodeFromString<CorrectionSessionResponse>(response)
+        }
+    }
+
+    /** `GET /tests/assigned`: pruebas de oraciones asignadas al alumno. */
+    suspend fun assignedTests(
+        baseUrl: String,
+        token: String,
+    ): Result<List<AssignedTest>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/tests/assigned",
+                method = "GET",
+                token = token,
+                body = null,
+            )
+            json.decodeFromString<List<AssignedTest>>(response)
+        }
+    }
+
+    /** `POST /tests/{testId}/attempts`: crea (o retoma) el intento del alumno para esa prueba. */
+    suspend fun startAttempt(
+        baseUrl: String,
+        token: String,
+        testId: String,
+        appVersion: String,
+    ): Result<AttemptResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/tests/$testId/attempts",
+                method = "POST",
+                token = token,
+                body = json.encodeToString(StartAttemptRequest(appVersion)),
+            )
+            json.decodeFromString<AttemptResponse>(response)
+        }
+    }
+
+    /** `POST /attempts/{id}/responses/{position}/start`: marca el inicio de la oración (sin cuerpo). */
+    suspend fun startSentence(
+        baseUrl: String,
+        token: String,
+        attemptId: String,
+        position: Int,
+    ): Result<StartSentenceResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/attempts/$attemptId/responses/$position/start",
+                method = "POST",
+                token = token,
+                body = null,
+            )
+            json.decodeFromString<StartSentenceResponse>(response)
+        }
+    }
+
+    /** `PUT /attempts/{id}/responses/{position}`: cierra la oración con sus métricas. */
+    suspend fun finishSentence(
+        baseUrl: String,
+        token: String,
+        attemptId: String,
+        position: Int,
+        body: FinishSentenceRequest,
+    ): Result<FinishSentenceResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val response = request(
+                baseUrl = baseUrl,
+                path = "/attempts/$attemptId/responses/$position",
+                method = "PUT",
+                token = token,
+                body = json.encodeToString(body),
+            )
+            json.decodeFromString<FinishSentenceResponse>(response)
+        }
+    }
+
+    /** `POST /attempts/{id}/cancel`: cancela el intento en curso; el backend responde sin cuerpo. */
+    suspend fun cancelAttempt(
+        baseUrl: String,
+        token: String,
+        attemptId: String,
+        reason: AttemptCancelReason,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            request(
+                baseUrl = baseUrl,
+                path = "/attempts/$attemptId/cancel",
+                method = "POST",
+                token = token,
+                body = json.encodeToString(CancelAttemptRequest(reason)),
+            )
+            Unit
         }
     }
 
