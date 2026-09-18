@@ -124,6 +124,7 @@ fun StudentHomeScreen() = FlorisScreen {
                 connectionState = manager.connectionState.collectAsState().value,
                 onCheckConnection = manager::checkBackendConnection,
                 testState = testState,
+                onLoadTests = manager.tests::loadTests,
                 onOpenTests = { navController.navigate(Routes.Settings.Tests) },
                 onOpenSentence = { navController.navigate(Routes.Settings.TestSentence) },
             )
@@ -260,11 +261,16 @@ private fun AccountSection(
     connectionState: EducationalBackendConnectionState,
     onCheckConnection: () -> Unit,
     testState: SentenceTestState,
+    onLoadTests: () -> Unit,
     onOpenTests: () -> Unit,
     onOpenSentence: () -> Unit,
 ) {
     LaunchedEffect(Unit) {
         if (connectionState is EducationalBackendConnectionState.Unknown) onCheckConnection()
+        // Contador de pendientes sin abrir la lista: solo en frío (Idle) o con la reanudación del
+        // arranque/login en vuelo (LoadingTests: el coordinador publica la lista al terminar). Con
+        // la lista ya cargada (Choosing) o una oración en curso no se vuelve a consultar.
+        if (testState is SentenceTestState.Idle || testState is SentenceTestState.LoadingTests) onLoadTests()
     }
     Column(
         modifier = Modifier
@@ -308,8 +314,8 @@ private fun AccountSection(
         }
         Spacer(Modifier.height(12.dp))
         // Solo con sesión válida: las pruebas exigen cuenta de alumno. Con una oración por
-        // resolver el botón lleva directo a ella; si no, a la lista (con las pendientes si ya
-        // se listaron).
+        // resolver el botón lleva directo a ella; si no, a la lista (con las pendientes en
+        // cuanto el coordinador las tiene).
         val sentence = testState.currentSentence()
         val testsLabel = when {
             sentence != null -> EducationalMessages.testInProgress(sentence.first, sentence.second)

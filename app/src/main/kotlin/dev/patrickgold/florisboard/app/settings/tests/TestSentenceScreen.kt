@@ -84,6 +84,7 @@ fun TestSentenceScreen() = FlorisScreen {
         val tests = manager.tests
         val state by tests.state.collectAsState()
         val correctionState by manager.state.collectAsState()
+        val finishing by manager.finishing.collectAsState()
         val lastError by tests.lastError.collectAsState()
         var askEmpty by rememberSaveable { mutableStateOf(false) }
         var askCancel by rememberSaveable { mutableStateOf(false) }
@@ -125,8 +126,14 @@ fun TestSentenceScreen() = FlorisScreen {
                     text = current.text,
                     enabled = true,
                     onTextChanged = { tests.onTextChanged(it) },
-                    primaryLabel = if (correcting) EducationalMessages.SentenceCorrecting else EducationalMessages.SentenceFinish,
-                    primaryEnabled = !correcting,
+                    // Terminar se deshabilita con una corrección en vuelo ("Corrigiendo…") y
+                    // mientras se envía el feedback pendiente antes del PUT ("Guardando…").
+                    primaryLabel = when {
+                        correcting -> EducationalMessages.SentenceCorrecting
+                        finishing -> EducationalMessages.Saving
+                        else -> EducationalMessages.SentenceFinish
+                    },
+                    primaryEnabled = !correcting && !finishing,
                     onPrimary = { if (current.text.isBlank()) askEmpty = true else manager.finishSentence() },
                     onCancel = { askCancel = true },
                 )

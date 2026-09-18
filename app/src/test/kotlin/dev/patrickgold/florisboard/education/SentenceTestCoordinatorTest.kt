@@ -570,6 +570,51 @@ class SentenceTestCoordinatorTest : FunSpec({
             }
         }
 
+        test("loadTests while resume is in flight lists the tests once the resume ends") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                val coordinator = coordinator(api)
+                coordinator.resume()
+                coordinator.state.value shouldBe SentenceTestState.LoadingTests
+                // La pantalla Pruebas se abre con la reanudación en vuelo: no se repite la consulta.
+                coordinator.loadTests()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Choosing(listOf(assigned()))
+                api.calls shouldBe listOf("assigned")
+                // La petición no se arrastra a la siguiente reanudación (que sin lista pedida acaba en Idle).
+                coordinator.resume()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Idle
+            }
+        }
+
+        test("loadTests while a failing resume is in flight ends in Failed, not Idle") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                api.assignedResult = Result.failure(SocketTimeoutException("timeout"))
+                val coordinator = coordinator(api)
+                coordinator.resume()
+                coordinator.loadTests()
+                advanceUntilIdle()
+                coordinator.state.value.shouldBeInstanceOf<SentenceTestState.Failed>()
+                coordinator.lastError.value shouldBe null
+            }
+        }
+
+        test("loadTests while resume finds a test in progress resumes it") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                api.assignedResult = Result.success(listOf(assigned(status = "IN_PROGRESS")))
+                api.startAttemptResult = Result.success(attempt(next = 2))
+                val coordinator = coordinator(api)
+                coordinator.resume()
+                coordinator.loadTests()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
+                api.calls shouldBe listOf("assigned", "startAttempt:test-1:1.2.3")
+            }
+        }
+
         test("a matching draft from the same boot restores Writing with text and counters") {
             runTest {
                 val api = FakeSentenceTestApi()

@@ -49,6 +49,14 @@ class EducationalCorrectionManager(context: Context) {
     private val _state = MutableStateFlow<EducationalCorrectionState>(EducationalCorrectionState.Idle)
     val state: StateFlow<EducationalCorrectionState> = _state
 
+    /**
+     * Terminar en curso: se está vaciando la cola de feedback antes del `PUT` de la oración. La
+     * pantalla deshabilita Terminar ("Guardando…") mientras tanto; en cuanto el coordinador pasa
+     * a `Finishing` vuelve a `false`.
+     */
+    private val _finishing = MutableStateFlow(false)
+    val finishing: StateFlow<Boolean> = _finishing
+
     private val _connectionState = MutableStateFlow<EducationalBackendConnectionState>(
         EducationalBackendConnectionState.Unknown,
     )
@@ -363,15 +371,22 @@ class EducationalCorrectionManager(context: Context) {
      * elegir cuentan como rechazadas ([ignoreSuggestion]), una edición en curso se cierra como
      * "Listo" ([finishEdit]), una corrección aplicada se queda aplicada. Con una corrección en
      * vuelo no se termina (la pantalla deshabilita Terminar con "Corrigiendo…" mientras tanto).
+     *
+     * El feedback encolado (incluido el que acaba de generar el cierre de los globos) se envía
+     * ANTES del `PUT …/responses/{position}`: el backend cierra el feedback de la oración al
+     * terminarla y un `PATCH` tardío se perdería (400 "Feedback is closed"), dejando la sesión de
+     * corrección sin decisión en el panel docente. Mientras se vacía la cola [finishing] es
+     * `true`; `finishedOffsetMs` se mide cuando la cola queda vacía (normalmente al instante).
      */
     fun finishSentence() {
+        if (_finishing.value) return
         when (_state.value) {
             is EducationalCorrectionState.Processing -> return
             is EducationalCorrectionState.ShowingSuggestions -> ignoreSuggestion()
             is EducationalCorrectionState.EditingInPlace -> finishEdit()
             else -> reset()
         }
-        tests.finish()
+        scope.launch { finishAfterFeedback(feedbackQueue, _finishing) { tests.finish() } }
     }
 
     /** Cierra avisos y errores; no interrumpe una petición en curso. */
@@ -484,6 +499,21 @@ class EducationalCorrectionManager(context: Context) {
 }
 
 private const val PREWARM_DEBOUNCE_MS = 2 * 60 * 1000L // 2 minutos
+
+/**
+ * Secuencia de Terminar, sin Android para probarla en JVM: marca [finishing], espera a que
+ * [queue] envíe todo el feedback pendiente y solo entonces llama a [finish] (que publica el estado
+ * `Finishing` del coordinador). Si la espera se cancela, [finish] no se llama.
+ */
+internal suspend fun finishAfterFeedback(queue: FeedbackQueue, finishing: MutableStateFlow<Boolean>, finish: () -> Unit) {
+    finishing.value = true
+    try {
+        queue.drain()
+    } finally {
+        finishing.value = false
+    }
+    finish()
+}
 
 // URL del backend. Se define en build.gradle.kts (buildConfigField EDUCATION_BACKEND_BASE_URL).
 val EducationalBackendBaseUrls = listOf(

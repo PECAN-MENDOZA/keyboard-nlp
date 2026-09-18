@@ -91,6 +91,10 @@ fun TestsScreen() = FlorisScreen {
                     tests.leaveToHome()
                     tests.loadTests()
                 }
+                // Idle no es una pantalla: se pide la lista (el coordinador ya publica la lista
+                // cuando se le pidió durante una reanudación; esto cubre cualquier otra vuelta a
+                // Idle). No hay bucle: desde Idle, loadTests pasa a LoadingTests o a Failed.
+                state == SentenceTestState.Idle -> tests.loadTests()
             }
         }
 

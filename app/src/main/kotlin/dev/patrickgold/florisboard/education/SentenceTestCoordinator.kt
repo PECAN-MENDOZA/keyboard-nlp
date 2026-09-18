@@ -123,6 +123,13 @@ class SentenceTestCoordinator(
     private val busy: Boolean get() = job?.isActive == true
 
     /**
+     * Se pidió la lista mientras `GET assigned` ya volaba (p. ej. abrir Pruebas justo tras iniciar
+     * sesión, con [resume] en curso): al terminar se publica [SentenceTestState.Choosing] (o
+     * [SentenceTestState.Failed]) en vez de `Idle`, que la pantalla pintaría como carga sin fin.
+     */
+    private var listRequested = false
+
+    /**
      * Último alumno conocido: permite guardar el borrador aunque la sesión ya haya vencido y
      * detectar que entró otra cuenta en el mismo teléfono ([adoptSessionOwner]).
      */
@@ -164,11 +171,16 @@ class SentenceTestCoordinator(
 
     /**
      * Lista las pruebas asignadas. Si alguna está `IN_PROGRESS` no hay nada que elegir: se retoma
-     * directamente (el backend devuelve el intento existente con su `nextPosition`).
+     * directamente (el backend devuelve el intento existente con su `nextPosition`). Con una
+     * consulta ya en vuelo ([resume] o esta misma) no se repite: su resultado se publica como lista.
      */
     fun loadTests(): Unit = synchronized(lock) {
         val current = adoptSessionOwner()
-        if (busy || inProgress() || _state.value is SentenceTestState.Cancelling) return
+        if (inProgress() || _state.value is SentenceTestState.Cancelling) return
+        if (busy) {
+            if (_state.value is SentenceTestState.LoadingTests) listRequested = true
+            return
+        }
         val token = current?.token
         if (token == null) {
             _state.value = SentenceTestState.Failed(EducationalMessages.NoSession)
@@ -211,7 +223,8 @@ class SentenceTestCoordinator(
      * (`responseId` se recupera con `startSentence`, idempotente); borrador de otro arranque →
      * [SentenceTestState.ClockLost]; sin borrador → [SentenceTestState.AtSentence]. Sin prueba en
      * curso → [SentenceTestState.Idle]. Si la consulta falla se queda en `Idle` con [lastError];
-     * el borrador se conserva para el siguiente intento.
+     * el borrador se conserva para el siguiente intento. Si mientras tanto alguien pidió la lista
+     * ([loadTests]), el resultado se publica como en `loadTests` (`Choosing` o `Failed`).
      *
      * Otra cuenta en el mismo teléfono (el último alumno conocido no es el de la sesión): nada
      * del anterior sobrevive, ni la oración en curso, ni la operación en vuelo ni el borrador.
@@ -228,9 +241,15 @@ class SentenceTestCoordinator(
                 .onSuccess { tests ->
                     lastTests = tests
                     val inProgress = tests.firstOrNull { it.isInProgress }
-                    if (inProgress == null) transition(SentenceTestState.Idle) { drafts.clear() } else resumeAttempt(token, inProgress)
+                    when {
+                        inProgress != null -> resumeAttempt(token, inProgress)
+                        listRequested -> transition(SentenceTestState.Choosing(tests)) { drafts.clear() }
+                        else -> transition(SentenceTestState.Idle) { drafts.clear() }
+                    }
                 }
-                .onFailure { error -> transition(SentenceTestState.Idle) { reportError(error) } }
+                .onFailure { error ->
+                    if (listRequested) transition(failed(error)) else transition(SentenceTestState.Idle) { reportError(error) }
+                }
         }
     }
 
@@ -399,6 +418,7 @@ class SentenceTestCoordinator(
     private fun forgetPreviousOwner() {
         job?.cancel()
         job = null
+        listRequested = false
         lastTests = emptyList()
         _lastError.value = null
         _state.value = SentenceTestState.Idle
@@ -417,6 +437,7 @@ class SentenceTestCoordinator(
             _state.value = next
             sideEffect()
             job = null
+            listRequested = false
         }
     }
 
