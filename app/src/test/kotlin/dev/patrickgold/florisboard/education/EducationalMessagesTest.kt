@@ -87,52 +87,93 @@ class EducationalMessagesTest : FunSpec({
         }
     }
 
-    context("experiment") {
-        test("400 is an invalid access code only when redeeming") {
-            EducationalMessages.experiment(EducationalHttpException(400, ""), ExperimentOp.REDEEM) shouldBe
-                EducationalMessages.InvalidAccessCode
-        }
-        test("400 on start, complete or cancel means the run is no longer active") {
-            listOf(ExperimentOp.START, ExperimentOp.COMPLETE, ExperimentOp.CANCEL).forEach { op ->
-                EducationalMessages.experiment(EducationalHttpException(400, ""), op) shouldBe
-                    EducationalMessages.ExperimentNotActive
-            }
-            EducationalMessages.ExperimentNotActive shouldBe "Esta prueba ya no está activa. Avisa al investigador."
-            EducationalMessages.experiment(EducationalHttpException(400, ""), ExperimentOp.RESTORE) shouldBe
-                "No se pudo continuar con la prueba (código 400)."
-        }
+    context("sentence tests") {
         test("401 is an expired session") {
-            ExperimentOp.entries.forEach { op ->
-                EducationalMessages.experiment(EducationalHttpException(401, ""), op) shouldBe
-                    EducationalMessages.SessionExpired
-            }
+            EducationalMessages.sentenceTest(EducationalHttpException(401, "")) shouldBe EducationalMessages.SessionExpired
         }
-        test("404 means the run is gone") {
-            EducationalMessages.experiment(EducationalHttpException(404, ""), ExperimentOp.COMPLETE) shouldBe
+        test("404 means the test is gone") {
+            EducationalMessages.sentenceTest(EducationalHttpException(404, "")) shouldBe
                 "Esa prueba ya no está disponible."
         }
-        test("409 on complete is a conflict the student can retry") {
-            EducationalMessages.experiment(EducationalHttpException(409, ""), ExperimentOp.COMPLETE) shouldBe
-                EducationalMessages.ExperimentCompletionConflict
-            EducationalMessages.ExperimentCompletionConflict shouldBe "No pudimos guardar tu texto. Toca Reintentar."
+        test("409 is a test state conflict the student cannot fix alone") {
+            EducationalMessages.sentenceTest(EducationalHttpException(409, """{"message":"Another test is in progress"}""")) shouldBe
+                EducationalMessages.TestConflict
+            EducationalMessages.TestConflict shouldBe "No se pudo continuar con la prueba. Avisa a tu profesor."
         }
-        test("the pending completion and pending cancel notices ask to retry") {
-            EducationalMessages.ExperimentCompletionPending shouldBe
-                "No pudimos confirmar que tu texto se guardó. Toca Reintentar."
-            EducationalMessages.ExperimentCancelPending shouldBe
-                "No pudimos confirmar la cancelación. Toca Reintentar."
+        test("5xx is a server problem") {
+            EducationalMessages.sentenceTest(EducationalHttpException(503, "")) shouldBe
+                "El servidor tuvo un problema. Inténtalo en unos minutos."
         }
         test("any network failure asks to check the connection") {
-            ExperimentOp.entries.forEach { op ->
-                networkErrors.forEach { error ->
-                    EducationalMessages.experiment(error, op) shouldBe
-                        "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo."
-                }
+            networkErrors.forEach { error ->
+                EducationalMessages.sentenceTest(error) shouldBe
+                    "No se pudo conectar con el servidor. Revisa la conexión e inténtalo de nuevo."
             }
+            EducationalMessages.sentenceTest(IllegalStateException("x")) shouldBe "No se pudo continuar con la prueba."
         }
         test("unknown http codes include the code") {
-            EducationalMessages.experiment(EducationalHttpException(418, ""), ExperimentOp.START) shouldBe
+            EducationalMessages.sentenceTest(EducationalHttpException(418, "")) shouldBe
                 "No se pudo continuar con la prueba (código 418)."
+        }
+    }
+
+    context("sentence test screens") {
+        test("every screen text is non-empty") {
+            listOf(
+                EducationalMessages.TestsTitle, EducationalMessages.TestsEmpty, EducationalMessages.TestsLoading,
+                EducationalMessages.TestsRefresh, EducationalMessages.TestStatusPending,
+                EducationalMessages.TestStatusInProgress, EducationalMessages.TestStatusCompleted,
+                EducationalMessages.TestStart, EducationalMessages.TestStarting, EducationalMessages.TestInProgress,
+                EducationalMessages.WithHelp, EducationalMessages.WithoutHelp, EducationalMessages.SentenceStart,
+                EducationalMessages.SentenceFinish, EducationalMessages.SentenceCorrecting,
+                EducationalMessages.SentenceEmptyQuestion, EducationalMessages.Yes, EducationalMessages.No,
+                EducationalMessages.Saving, EducationalMessages.SentenceSaveFailed, EducationalMessages.SentenceRetry,
+                EducationalMessages.CancelTechnical, EducationalMessages.CancelTest, EducationalMessages.CancelTestTitle,
+                EducationalMessages.CancelTestIntro, EducationalMessages.KeepGoing, EducationalMessages.Cancelling,
+                EducationalMessages.TestCompleted, EducationalMessages.TestCancelled, EducationalMessages.ClockLost,
+                EducationalMessages.BackHome, EducationalMessages.Back, EducationalMessages.LogoutDuringTest,
+                EducationalMessages.CorrectionDisabledInSentence,
+            ).forEach { text -> text.isNotBlank() shouldBe true }
+        }
+        test("the fixed texts of the brief") {
+            EducationalMessages.TestsTitle shouldBe "Pruebas"
+            EducationalMessages.TestsEmpty shouldBe "No tienes pruebas pendientes."
+            EducationalMessages.TestStart shouldBe "Comenzar prueba"
+            EducationalMessages.WithHelp shouldBe "Con ayuda"
+            EducationalMessages.WithoutHelp shouldBe "Sin ayuda"
+            EducationalMessages.SentenceStart shouldBe "Comenzar"
+            EducationalMessages.SentenceFinish shouldBe "Terminar"
+            EducationalMessages.SentenceEmptyQuestion shouldBe "¿Dejar esta oración en blanco?"
+            EducationalMessages.TestCompleted shouldBe "¡Prueba completada! Gracias."
+            EducationalMessages.SentenceSaveFailed shouldBe "No pudimos guardar"
+            EducationalMessages.SentenceRetry shouldBe "Reintentar"
+            EducationalMessages.CancelTechnical shouldBe "Cancelar (problema técnico)"
+            EducationalMessages.CorrectionDisabledInSentence shouldBe "La corrección está desactivada en esta oración"
+            EducationalMessages.ClockLost shouldBe
+                "El teléfono se reinició durante la oración. Solo puedes cancelar la prueba."
+        }
+        test("SentenceProgress formats position and total") {
+            EducationalMessages.sentenceProgress(3, 20) shouldBe "Oración 3 de 20"
+            EducationalMessages.sentenceProgress(1, 3) shouldBe "Oración 1 de 3"
+            EducationalMessages.sentenceCount(1) shouldBe "1 oración"
+            EducationalMessages.sentenceCount(3) shouldBe "3 oraciones"
+        }
+        test("TestStartQuestion names the test") {
+            EducationalMessages.testStartQuestion("Dictado 1") shouldBe
+                "¿Comenzar la prueba Dictado 1? Tu profesor te dirá qué escribir."
+        }
+        test("the home button shows the pending count only when there is one") {
+            EducationalMessages.testsWithPending(0) shouldBe "Pruebas"
+            EducationalMessages.testsWithPending(1) shouldBe "Pruebas · 1 pendiente"
+            EducationalMessages.testsWithPending(4) shouldBe "Pruebas · 4 pendientes"
+            EducationalMessages.testInProgress(2, 3) shouldBe "Prueba en curso · oración 2 de 3"
+        }
+        test("assistance and status labels") {
+            EducationalMessages.assistanceLabel(SentenceAssistance.ASSISTED) shouldBe "Con ayuda"
+            EducationalMessages.assistanceLabel(SentenceAssistance.UNASSISTED) shouldBe "Sin ayuda"
+            EducationalMessages.testStatusLabel("PENDING") shouldBe "Pendiente"
+            EducationalMessages.testStatusLabel("IN_PROGRESS") shouldBe "En curso"
+            EducationalMessages.testStatusLabel("COMPLETED") shouldBe "Completada"
         }
     }
 
@@ -168,42 +209,39 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.Undo, EducationalMessages.Done,
             EducationalMessages.Close, EducationalMessages.CloseDescription,
             EducationalMessages.AvatarDescription,
-            EducationalMessages.InvalidAccessCode, EducationalMessages.TimerLost,
-            EducationalMessages.CorrectionDisabledInTask,
-            EducationalMessages.ExperimentTitle, EducationalMessages.ExperimentNoSession,
-            EducationalMessages.ExperimentBackHome, EducationalMessages.ExperimentCodeIntro,
-            EducationalMessages.ExperimentCodeLabel, EducationalMessages.ExperimentValidateCode,
-            EducationalMessages.ExperimentValidating, EducationalMessages.ExperimentReadyTitle,
-            EducationalMessages.ExperimentReadyIntro, EducationalMessages.ExperimentParticipantLabel,
-            EducationalMessages.ExperimentPromptLabel, EducationalMessages.ExperimentConditionLabel,
-            EducationalMessages.ConditionAssisted, EducationalMessages.ConditionUnassisted,
-            EducationalMessages.ExperimentStart, EducationalMessages.ExperimentStarting,
-            EducationalMessages.ExperimentTextLabel, EducationalMessages.ExperimentElapsedLabel,
-            EducationalMessages.ExperimentElapsedNone, EducationalMessages.ExperimentFinish,
-            EducationalMessages.ExperimentSaving, EducationalMessages.ExperimentSavingDetail,
-            EducationalMessages.ExperimentCancel, EducationalMessages.ExperimentCancelTitle,
-            EducationalMessages.ExperimentCancelIntro, EducationalMessages.CancelReasonAbandoned,
+            EducationalMessages.CorrectionDisabledInSentence, EducationalMessages.TestConflict,
+            EducationalMessages.TestsTitle, EducationalMessages.TestsEmpty,
+            EducationalMessages.TestsLoading, EducationalMessages.TestsRefresh,
+            EducationalMessages.TestStatusPending, EducationalMessages.TestStatusInProgress,
+            EducationalMessages.TestStatusCompleted, EducationalMessages.testStartQuestion("Dictado 1"),
+            EducationalMessages.TestStart, EducationalMessages.TestStarting,
+            EducationalMessages.TestInProgress, EducationalMessages.sentenceProgress(1, 3),
+            EducationalMessages.WithHelp, EducationalMessages.WithoutHelp,
+            EducationalMessages.SentenceStart, EducationalMessages.SentenceFinish,
+            EducationalMessages.SentenceCorrecting, EducationalMessages.SentenceEmptyQuestion,
+            EducationalMessages.Yes, EducationalMessages.No,
+            EducationalMessages.Saving, EducationalMessages.SentenceSaveFailed,
+            EducationalMessages.SentenceRetry, EducationalMessages.CancelTechnical,
+            EducationalMessages.CancelTest, EducationalMessages.CancelTestTitle,
+            EducationalMessages.CancelTestIntro, EducationalMessages.CancelReasonAbandoned,
             EducationalMessages.CancelReasonTechnical, EducationalMessages.CancelReasonInterrupted,
-            EducationalMessages.ExperimentKeepGoing, EducationalMessages.ExperimentRetry,
-            EducationalMessages.ExperimentCloseAction, EducationalMessages.ExperimentBack,
-            EducationalMessages.ExperimentCompleted, EducationalMessages.ExperimentCompletedDetail,
-            EducationalMessages.ExperimentCancelled, EducationalMessages.ExperimentCancelledDetail,
-            EducationalMessages.ExperimentPrivacy, EducationalMessages.ExperimentCompletionRejected,
-            EducationalMessages.ExperimentRestoring, EducationalMessages.ExperimentCancelling,
-            EducationalMessages.ExperimentNotActive, EducationalMessages.ExperimentCompletionPending,
-            EducationalMessages.ExperimentCompletionConflict, EducationalMessages.LogoutDuringExperiment,
-            EducationalMessages.ExperimentCancelPending,
-            EducationalMessages.textCounter(12, 10_000), EducationalMessages.elapsedDescription("1:05"),
-        ) + ExperimentCondition.entries.map { EducationalMessages.conditionLabel(it) } +
-            CancelReason.entries.map { EducationalMessages.cancelReasonLabel(it) } +
+            EducationalMessages.KeepGoing, EducationalMessages.Cancelling,
+            EducationalMessages.TestCompleted, EducationalMessages.TestCancelled,
+            EducationalMessages.ClockLost, EducationalMessages.BackHome, EducationalMessages.Back,
+            EducationalMessages.LogoutDuringTest, EducationalMessages.testsWithPending(0),
+            EducationalMessages.testsWithPending(1), EducationalMessages.testsWithPending(2),
+            EducationalMessages.testInProgress(2, 3), EducationalMessages.testStatusLabel("PENDING"),
+        ) + SentenceAssistance.entries.map { EducationalMessages.assistanceLabel(it) } +
+            AttemptCancelReason.entries.map { EducationalMessages.cancelReasonLabel(it) } +
             networkErrors.map { EducationalMessages.login(it) } +
             networkErrors.map { EducationalMessages.correction(it) } +
-            ExperimentOp.entries.flatMap { op -> networkErrors.map { EducationalMessages.experiment(it, op) } } +
+            networkErrors.map { EducationalMessages.sentenceTest(it) } +
             listOf(400, 401, 403, 404, 409, 418, 502, 503).flatMap { code ->
                 listOf(
                     EducationalMessages.login(EducationalHttpException(code, "")),
                     EducationalMessages.correction(EducationalHttpException(code, "")),
-                ) + ExperimentOp.entries.map { EducationalMessages.experiment(EducationalHttpException(code, ""), it) }
+                    EducationalMessages.sentenceTest(EducationalHttpException(code, "")),
+                )
             }
         all.forEach { text ->
             text shouldNotContainIgnoringCase "cloud run"

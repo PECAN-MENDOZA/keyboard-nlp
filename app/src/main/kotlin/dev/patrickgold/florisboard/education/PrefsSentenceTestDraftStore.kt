@@ -21,19 +21,20 @@ import android.provider.Settings
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
-/** [ExperimentMarkerStore] sobre SharedPreferences (`experiment_marker`), JSON con kotlinx.serialization. */
-class PrefsExperimentMarkerStore(context: Context) : ExperimentMarkerStore {
+/** [SentenceTestDraftStore] sobre SharedPreferences (`sentence_test_draft`), JSON con kotlinx.serialization. */
+class PrefsSentenceTestDraftStore(context: Context) : SentenceTestDraftStore {
     private val prefs = context.getSharedPreferences(PrefsName, Context.MODE_PRIVATE)
     private val json = Json { ignoreUnknownKeys = true }
 
-    override fun load(): ExperimentMarker? {
+    override fun load(): SentenceDraft? {
         val raw = prefs.getString(Key, null) ?: return null
-        return runCatching { json.decodeFromString<ExperimentMarker>(raw) }.getOrNull()
+        return runCatching { json.decodeFromString<SentenceDraft>(raw) }.getOrNull()
     }
 
-    override fun save(marker: ExperimentMarker) {
-        // commit(): el marcador debe estar en disco antes de que el proceso pueda morir.
-        prefs.edit().putString(Key, json.encodeToString(marker)).commit()
+    override fun save(draft: SentenceDraft) {
+        // commit(): el borrador (y sobre todo la clave de finalización) debe estar en disco antes
+        // de que el proceso pueda morir; se guarda por tecla, pero el JSON es diminuto.
+        prefs.edit().putString(Key, json.encodeToString(draft)).commit()
     }
 
     override fun clear() {
@@ -41,12 +42,12 @@ class PrefsExperimentMarkerStore(context: Context) : ExperimentMarkerStore {
     }
 
     companion object {
-        private const val PrefsName = "experiment_marker"
-        private const val Key = "marker"
+        private const val PrefsName = "sentence_test_draft"
+        private const val Key = "draft"
 
         /** Identifica el arranque actual del teléfono: `elapsedRealtime` solo es comparable dentro del mismo. */
         fun bootId(context: Context): String =
             Settings.Global.getString(context.contentResolver, "boot_count")
-                ?: EducationalExperimentCoordinator.UnknownBootId
+                ?: SentenceTestCoordinator.UnknownBootId
     }
 }

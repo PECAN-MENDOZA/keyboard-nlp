@@ -57,7 +57,6 @@ import dev.patrickgold.florisboard.app.settings.advanced.RestoreScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.DictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryScreen
 import dev.patrickgold.florisboard.app.settings.dictionary.UserDictionaryType
-import dev.patrickgold.florisboard.app.settings.experiment.ExperimentScreen
 import dev.patrickgold.florisboard.app.settings.accessibility.AccessibilityScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.InputFeedbackScreen
 import dev.patrickgold.florisboard.app.settings.keyboard.KeyboardScreen
@@ -66,6 +65,8 @@ import dev.patrickgold.florisboard.app.settings.localization.LanguagePackManager
 import dev.patrickgold.florisboard.app.settings.localization.LocalizationScreen
 import dev.patrickgold.florisboard.app.settings.localization.SelectLocaleScreen
 import dev.patrickgold.florisboard.app.settings.localization.SubtypeEditorScreen
+import dev.patrickgold.florisboard.app.settings.tests.TestSentenceScreen
+import dev.patrickgold.florisboard.app.settings.tests.TestsScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeManagerScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeManagerScreenAction
 import dev.patrickgold.florisboard.app.settings.theme.ThemeScreen
@@ -108,8 +109,12 @@ object Routes {
         object KeyboardSettings
 
         @Serializable
-        @Deeplink("settings/experiment")
-        object Experiment
+        @Deeplink("settings/tests")
+        object Tests
+
+        @Serializable
+        @Deeplink("settings/tests/sentence")
+        object TestSentence
 
         @Serializable
         @Deeplink("settings/localization")
@@ -250,7 +255,8 @@ object Routes {
 
             composableWithDeepLink(Settings.Home::class) { StudentHomeScreen() }
             composableWithDeepLink(Settings.KeyboardSettings::class) { KeyboardSettingsScreen() }
-            composableWithDeepLink(Settings.Experiment::class) { ExperimentScreen() }
+            composableWithDeepLink(Settings.Tests::class) { TestsScreen() }
+            composableWithDeepLink(Settings.TestSentence::class) { TestSentenceScreen() }
 
             composableWithDeepLink(Settings.Localization::class) { LocalizationScreen() }
             composableWithDeepLink(Settings.SelectLocale::class) { SelectLocaleScreen() }

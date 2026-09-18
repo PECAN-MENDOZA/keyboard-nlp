@@ -75,9 +75,9 @@ data class StudentLoginResponse(
 data class ProcessCorrectionRequest(
     @SerialName("texto_original")
     val originalText: String,
-    // Solo se envía en una ejecución experimental ASSISTED y ACTIVE.
-    @SerialName("id_ejecucion")
-    val experimentRunId: String? = null,
+    // Solo se envía cuando la corrección ocurre dentro de una prueba de oraciones activa.
+    @SerialName("id_respuesta")
+    val testResponseId: String? = null,
 )
 
 @Serializable
@@ -153,8 +153,8 @@ data class CorrectionFeedbackRequest(
     // la sugerencia tal cual. El backend clasifica como "editada" si difiere de la sugerencia base.
     @SerialName("texto_final")
     val finalText: String? = null,
-    // Motivo opcional de un segundo feedback sobre la misma sesión ("UNDO"). El backend actual
-    // lo ignora; el plan del modo experimental lo registra como evento.
+    // Motivo opcional de un segundo feedback sobre la misma sesión ("UNDO"). El backend lo
+    // ignora; en una prueba de oraciones el deshacer se cuenta aparte (`suggestionsUndone`).
     @SerialName("motivo")
     val reason: String? = null,
 )

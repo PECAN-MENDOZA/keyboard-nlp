@@ -28,8 +28,9 @@ import kotlinx.coroutines.sync.withLock
  * Cola FIFO de envíos de feedback (aceptar, rechazar, terminar edición, deshacer), sin Android.
  * Los envíos se completan en el orden en que se encolaron aunque el primero sea lento, y
  * [drain] permite esperar a TODOS —incluidos los encolados mientras se esperaba— antes de
- * finalizar una ejecución: el backend cierra el feedback al completar, así que un feedback que
- * llegara después se perdería (400 terminal) y la aceptación quedaría mal registrada.
+ * Terminar la oración de una prueba (`EducationalCorrectionManager.finishSentence`): el backend
+ * cierra el feedback de la oración al terminarla, así que un feedback que llegara después se
+ * perdería (400 "Feedback is closed", terminal) y la decisión quedaría sin registrar.
  */
 class FeedbackQueue(private val scope: CoroutineScope) {
     private val mutex = Mutex()

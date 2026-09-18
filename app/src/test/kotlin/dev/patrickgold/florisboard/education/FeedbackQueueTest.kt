@@ -20,6 +20,7 @@ import io.kotest.core.spec.style.FunSpec
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -100,6 +101,36 @@ class FeedbackQueueTest : FunSpec({
     test("drain returns at once when nothing is queued") {
         runTest {
             FeedbackQueue(this).drain()
+        }
+    }
+
+    test("finishSentence sends the queued feedback before finishing and flags finishing meanwhile") {
+        runTest(StandardTestDispatcher()) {
+            val queue = FeedbackQueue(this)
+            val finishing = MutableStateFlow(false)
+            val slow = CompletableDeferred<Unit>()
+            val events = mutableListOf<String>()
+            // El rechazo que genera Terminar con globos abiertos va lento (backend frío).
+            queue.enqueue { slow.await(); events += "feedback" }
+            launch { finishAfterFeedback(queue, finishing) { events += "finish" } }
+            testScheduler.runCurrent()
+            events shouldBe emptyList()
+            finishing.value shouldBe true
+
+            slow.complete(Unit)
+            advanceUntilIdle()
+            events shouldBe listOf("feedback", "finish")
+            finishing.value shouldBe false
+        }
+    }
+
+    test("finishSentence with an empty queue finishes at once") {
+        runTest {
+            val finishing = MutableStateFlow(false)
+            var finished = false
+            finishAfterFeedback(FeedbackQueue(this), finishing) { finished = true }
+            finished shouldBe true
+            finishing.value shouldBe false
         }
     }
 })
