@@ -189,12 +189,19 @@ private fun TestRow(test: AssignedTest, onClick: (() -> Unit)?) {
     }
 }
 
+/** Confirmación de inicio: la pregunta lleva el código de la prueba y debajo va su título. */
 @Composable
 private fun StartTestDialog(test: AssignedTest, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(test.title) },
-        text = { Text(EducationalMessages.testStartQuestion(test.title)) },
+        title = { Text(EducationalMessages.testStartQuestion(test.code)) },
+        text = {
+            Column {
+                Text(test.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(EducationalMessages.TestStartHint)
+            }
+        },
         confirmButton = {
             TextButton(onClick = onConfirm, modifier = Modifier.heightIn(min = 48.dp)) {
                 Text(EducationalMessages.TestStart)

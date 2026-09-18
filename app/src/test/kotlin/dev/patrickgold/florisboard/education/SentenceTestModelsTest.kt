@@ -96,6 +96,15 @@ class SentenceTestModelsTest : FunSpec({
             "\"suggestionsUndone\":0,\"skipped\":true,\"completionKey\":\"key-1\"}"
     }
 
+    test("clampSentence keeps the backend limit of 5000 characters without splitting a surrogate pair") {
+        MaxSentenceLength shouldBe 5000
+        clampSentence("hola") shouldBe "hola"
+        clampSentence("a".repeat(5000)) shouldBe "a".repeat(5000)
+        clampSentence("a".repeat(5001)) shouldBe "a".repeat(5000)
+        // 4999 letras + un emoji (par sustituto) + una letra: el corte cae dentro del par y lo descarta.
+        clampSentence("a".repeat(4999) + "😀x") shouldBe "a".repeat(4999)
+    }
+
     test("suggestion counters start at zero and increment independently") {
         val counters = SuggestionCounters()
         counters shouldBe SuggestionCounters(0, 0, 0, 0)

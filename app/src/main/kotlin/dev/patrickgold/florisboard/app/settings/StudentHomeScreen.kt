@@ -124,7 +124,7 @@ fun StudentHomeScreen() = FlorisScreen {
                 connectionState = manager.connectionState.collectAsState().value,
                 onCheckConnection = manager::checkBackendConnection,
                 testState = testState,
-                onLoadTests = manager.tests::loadTests,
+                onLoadTests = manager.tests::loadTestsForHome,
                 onOpenTests = { navController.navigate(Routes.Settings.Tests) },
                 onOpenSentence = { navController.navigate(Routes.Settings.TestSentence) },
             )
@@ -267,10 +267,11 @@ private fun AccountSection(
 ) {
     LaunchedEffect(Unit) {
         if (connectionState is EducationalBackendConnectionState.Unknown) onCheckConnection()
-        // Contador de pendientes sin abrir la lista: solo en frío (Idle) o con la reanudación del
-        // arranque/login en vuelo (LoadingTests: el coordinador publica la lista al terminar). Con
-        // la lista ya cargada (Choosing) o una oración en curso no se vuelve a consultar.
-        if (testState is SentenceTestState.Idle || testState is SentenceTestState.LoadingTests) onLoadTests()
+        // Contador de pendientes sin abrir la lista: el coordinador decide (loadTestsForHome) si
+        // hace falta consultar: en frío, con la reanudación en vuelo (publica la lista al
+        // terminar) o tras un estado terminal que no pasó por "Volver al inicio"; con la lista
+        // ya cargada o una oración en curso no vuelve a consultar.
+        onLoadTests()
     }
     Column(
         modifier = Modifier

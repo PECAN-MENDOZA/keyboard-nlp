@@ -86,8 +86,10 @@ class EducationalCorrectionManager(context: Context) {
     /**
      * Pruebas de oraciones. Sin prueba en curso la corrección funciona como siempre; escribiendo
      * una oración `UNASSISTED` [requestCorrection] avisa y no llama al backend; en `ASSISTED` la
-     * corrección lleva `id_respuesta`. Un 401 del backend cierra la sesión local (no el
-     * coordinador): el inicio muestra el login y, al entrar, se reanuda con el mismo borrador.
+     * corrección lleva `id_respuesta`, pero solo desde el campo de la prueba (el editor activo es
+     * este mismo paquete): desde otra app se avisa y no se llama al backend. Un 401 del backend
+     * cierra la sesión local (no el coordinador): el inicio muestra el login y, al entrar, se
+     * reanuda con el mismo borrador.
      */
     val tests = SentenceTestCoordinator(
         scope = scope,
@@ -201,9 +203,10 @@ class EducationalCorrectionManager(context: Context) {
         if (_state.value is EducationalCorrectionState.Processing) return
         if (_state.value is EducationalCorrectionState.EditingInPlace) finishEdit()
 
-        // Oración sin ayuda: se avisa y no se toca el backend (que lo revalida).
-        if (!tests.correctionAllowed()) {
-            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInSentence, NoticeKind.INFO), NOTICE_MS)
+        // Oración sin ayuda, o corrección desde otra app con una prueba en curso: se avisa y no
+        // se toca el backend (que lo revalida).
+        testCorrectionBlock()?.let { reason ->
+            show(EducationalCorrectionState.Notice(reason, NoticeKind.INFO), NOTICE_MS)
             return
         }
 
@@ -234,6 +237,14 @@ class EducationalCorrectionManager(context: Context) {
         }
     }
 
+    /**
+     * Gate de las pruebas: motivo para no corregir ahora (null = adelante). El campo de la prueba
+     * vive en esta misma app, así que el editor activo es "el de la prueba" cuando su paquete es
+     * el propio (`com.mvptesis.keyboard.debug` en debug).
+     */
+    private fun testCorrectionBlock(): String? =
+        tests.correctionBlock(editorPackage = editorInstance.activeInfo.packageName, ownPackage = appContext.packageName)
+
     /** Reenvia manualmente el mismo texto tras un error recuperable (sin reintento automatico). */
     fun retryCorrection() {
         val current = _state.value as? EducationalCorrectionState.Error ?: return
@@ -244,10 +255,11 @@ class EducationalCorrectionManager(context: Context) {
     private fun runCorrection(extractedText: ExtractedEducationalText) {
         // Se repite aquí (además de en requestCorrection) para cubrir retryCorrection: un
         // reintento tras un error no debe poder llegar al backend si mientras tanto la
-        // oración pasó a "sin ayuda" o se terminó. Ver docs/ux-smoke-test.md, "Pruebas de
-        // oraciones": IA en una oración sin ayuda y Reintentar tras error no llegan al backend.
-        if (!tests.correctionAllowed()) {
-            show(EducationalCorrectionState.Notice(EducationalMessages.CorrectionDisabledInSentence, NoticeKind.INFO), NOTICE_MS)
+        // oración pasó a "sin ayuda", se terminó o el alumno cambió a otra app. Ver
+        // docs/ux-smoke-test.md, "Pruebas de oraciones": IA en una oración sin ayuda y
+        // Reintentar tras error no llegan al backend.
+        testCorrectionBlock()?.let { reason ->
+            show(EducationalCorrectionState.Notice(reason, NoticeKind.INFO), NOTICE_MS)
             return
         }
         val processing = EducationalCorrectionState.Processing(extractedText, SystemClock.elapsedRealtime())
