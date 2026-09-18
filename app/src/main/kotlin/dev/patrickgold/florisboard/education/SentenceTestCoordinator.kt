@@ -146,6 +146,20 @@ class SentenceTestCoordinator(
     /** Sin prueba en curso, como siempre; con una, solo escribiendo una oración con ayuda. */
     fun correctionAllowed(): Boolean = !inProgress() || writingAssisted() != null
 
+    /**
+     * Motivo por el que la corrección no procede ahora, o null si procede. Sin prueba en curso
+     * siempre procede. Con una, solo desde el campo de la prueba (el editor activo pertenece al
+     * propio teclado: [editorPackage] == [ownPackage]) y solo escribiendo una oración con ayuda;
+     * desde otra app se pide terminar la prueba, sin llamar al backend (ni `id_respuesta` ni
+     * contadores para una corrección ajena a la oración).
+     */
+    fun correctionBlock(editorPackage: String?, ownPackage: String): String? = when {
+        !inProgress() -> null
+        editorPackage != ownPackage -> EducationalMessages.CorrectionOnlyInTestField
+        writingAssisted() != null -> null
+        else -> EducationalMessages.CorrectionDisabledInSentence
+    }
+
     /** `id_respuesta` a enviar en la corrección: solo escribiendo una oración con ayuda. */
     fun activeResponseId(): String? = writingAssisted()?.responseId
 
@@ -196,6 +210,18 @@ class SentenceTestCoordinator(
                 }
                 .onFailure { error -> transition(failed(error)) }
         }
+    }
+
+    /**
+     * Entrada al inicio: pide la lista para el contador de pendientes salvo que ya esté cargada
+     * (`Choosing`) o haya una oración por resolver. Un estado terminal (completada, cancelada,
+     * fallo) ya se vio, aunque no se haya tocado "Volver al inicio": se vuelve a `Idle` y se lista.
+     * Una consulta en vuelo no se repite ([loadTests]).
+     */
+    fun loadTestsForHome(): Unit = synchronized(lock) {
+        if (_state.value is SentenceTestState.Choosing || inProgress()) return
+        leaveToHome()
+        loadTests()
     }
 
     /** Inicia la prueba elegida; si falla se vuelve a la lista con el motivo en [lastError]. */
@@ -281,11 +307,16 @@ class SentenceTestCoordinator(
         }
     }
 
-    /** Cada cambio del campo: fija la primera tecla (una sola vez, con texto) y guarda el borrador. */
+    /**
+     * Cada cambio del campo: fija la primera tecla (una sola vez, con texto), recorta al tope del
+     * backend ([clampSentence]; lo que sobre no entra) y guarda el borrador.
+     */
     fun onTextChanged(text: String): Unit = synchronized(lock) {
         val current = _state.value as? SentenceTestState.Writing ?: return
-        val firstKey = current.firstKeyAtElapsedMs ?: elapsedRealtime().takeIf { text.isNotEmpty() }
-        val next = current.copy(text = text, firstKeyAtElapsedMs = firstKey)
+        val clamped = clampSentence(text)
+        val firstKey = current.firstKeyAtElapsedMs ?: elapsedRealtime().takeIf { clamped.isNotEmpty() }
+        val next = current.copy(text = clamped, firstKeyAtElapsedMs = firstKey)
+        if (next == current) return
         _state.value = next
         saveDraft(next)
     }
@@ -365,8 +396,12 @@ class SentenceTestCoordinator(
     /**
      * Abandona el intento (desde la oración, escribiendo, tras un fallo o con el reloj perdido).
      * Solo pasa a [SentenceTestState.Cancelled] (y borra el borrador) cuando el backend lo
-     * confirma o responde que el intento ya estaba cerrado (400/404/409). Si falla, se vuelve al
-     * estado anterior con el motivo en [lastError].
+     * confirma o responde que el intento ya estaba cerrado (400/404/409). Un 409 "Attempt is not
+     * in progress" puede significar que el intento ya está COMPLETED (el `PUT` de la última
+     * oración sí llegó aunque el teclado no viera la respuesta): se consulta la lista (solo
+     * lectura; `startAttempt` abriría otro intento) y si la prueba figura completada se pasa a
+     * [SentenceTestState.Completed]. Si falla, se vuelve al estado anterior con el motivo en
+     * [lastError].
      */
     fun cancel(reason: AttemptCancelReason): Unit = synchronized(lock) {
         if (busy) return
@@ -388,10 +423,11 @@ class SentenceTestCoordinator(
             api.cancel(token, attempt.attemptId, reason)
                 .onSuccess { transition(SentenceTestState.Cancelled) { drafts.clear() } }
                 .onFailure { error ->
-                    if (error is EducationalHttpException && error.status in TerminalCancelStatuses) {
-                        transition(SentenceTestState.Cancelled) { drafts.clear() }
-                    } else {
-                        transition(previous) { reportError(error) }
+                    when {
+                        error.isNotInProgress() && completedInList(token, attempt) -> advance(attempt, null)
+                        error is EducationalHttpException && error.status in TerminalCancelStatuses ->
+                            transition(SentenceTestState.Cancelled) { drafts.clear() }
+                        else -> transition(previous) { reportError(error) }
                     }
                 }
         }
@@ -568,11 +604,22 @@ class SentenceTestCoordinator(
     private fun Throwable.isAlreadyCompleted(): Boolean =
         this is EducationalHttpException && status == 409 && body.contains(AlreadyCompleted, ignoreCase = true)
 
+    /** Al cancelar, el intento ya no está en curso: completado o cancelado antes. */
+    private fun Throwable.isNotInProgress(): Boolean =
+        this is EducationalHttpException && status == 409 &&
+            (body.contains(NotInProgress, ignoreCase = true) || body.contains(AlreadyCompleted, ignoreCase = true))
+
+    /** La lista de pruebas (solo lectura) dice que la de [attempt] está `COMPLETED`; si no se puede saber, false. */
+    private suspend fun completedInList(token: String, attempt: AttemptResponse): Boolean =
+        api.assigned(token).getOrNull()
+            ?.any { it.testId == attempt.testId && it.status == AssignedTest.StatusCompleted } == true
+
     companion object {
         /** `bootId` cuando el teléfono no expone `boot_count`: nunca cuenta como "el mismo arranque". */
         const val UnknownBootId = "unknown"
         private const val AlreadyFinished = "already finished"
         private const val AlreadyCompleted = "already completed"
+        private const val NotInProgress = "not in progress"
         private val TerminalCancelStatuses = setOf(400, 404, 409)
     }
 }

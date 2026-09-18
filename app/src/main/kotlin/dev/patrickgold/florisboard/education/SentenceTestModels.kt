@@ -44,6 +44,19 @@ data class AssignedTest(
 @Serializable
 data class StartAttemptRequest(val appVersion: String)
 
+/** Tope del backend para el texto final de una oración (`finalText @Size(max = 5000)`). */
+const val MaxSentenceLength = 5000
+
+/**
+ * Recorta el texto de la oración al tope del backend (un `PUT` más largo sería un 400 no
+ * reintentable). Un corte que caiga dentro de un par sustituto (emoji) descarta el par entero.
+ */
+fun clampSentence(text: String): String {
+    if (text.length <= MaxSentenceLength) return text
+    val cut = text.take(MaxSentenceLength)
+    return if (cut.last().isHighSurrogate()) cut.dropLast(1) else cut
+}
+
 /** Posición de una oración dentro del intento y su condición asignada. */
 @Serializable
 data class SentenceSlot(val position: Int, val assistance: SentenceAssistance)

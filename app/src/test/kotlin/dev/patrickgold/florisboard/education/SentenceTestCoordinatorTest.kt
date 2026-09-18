@@ -315,6 +315,16 @@ class SentenceTestCoordinatorTest : FunSpec({
             }
         }
 
+        test("the sentence text is capped at the backend limit") {
+            runTest {
+                val drafts = FakeDraftStore()
+                val coordinator = writing(position = 1, drafts = drafts)
+                coordinator.onTextChanged("a".repeat(MaxSentenceLength + 1))
+                coordinator.state.value.shouldBeInstanceOf<SentenceTestState.Writing>().text shouldBe "a".repeat(MaxSentenceLength)
+                drafts.draft?.text?.length shouldBe MaxSentenceLength
+            }
+        }
+
         test("a failed Comenzar stays at the sentence with a transient error") {
             runTest {
                 val api = FakeSentenceTestApi()
@@ -800,6 +810,43 @@ class SentenceTestCoordinatorTest : FunSpec({
             }
         }
 
+        test("cancel after a lost finish of the last sentence: 409 not in progress with the test completed is Completed") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                api.finishResults += Result.failure(SocketTimeoutException("timeout"))
+                val drafts = FakeDraftStore()
+                val coordinator = writing(3, api, drafts = drafts)
+                coordinator.onTextChanged("fin")
+                coordinator.finish()
+                advanceUntilIdle()
+                coordinator.state.value.shouldBeInstanceOf<SentenceTestState.FinishFailed>()
+                // El PUT sí llegó: el backend ya tiene el intento COMPLETED y la lista lo refleja.
+                api.cancelResult = Result.failure(EducationalHttpException(409, """{"message":"Attempt is not in progress"}"""))
+                api.assignedResult = Result.success(listOf(assigned(status = "COMPLETED")))
+                coordinator.cancel(AttemptCancelReason.TECHNICAL_PROBLEM)
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Completed(attempt(next = null))
+                drafts.draft shouldBe null
+                // Solo una consulta de lectura: nunca startAttempt, que abriría otro intento.
+                api.calls.takeLast(2) shouldBe listOf("cancel:attempt-1:TECHNICAL_PROBLEM", "assigned")
+            }
+        }
+
+        test("409 not in progress whose lookup fails or does not show the test completed is still Cancelled") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                val drafts = FakeDraftStore()
+                val coordinator = writing(1, api, drafts = drafts)
+                api.cancelResult = Result.failure(EducationalHttpException(409, """{"message":"Attempt is not in progress"}"""))
+                api.assignedResult = Result.failure(SocketTimeoutException("timeout"))
+                coordinator.cancel(AttemptCancelReason.ABANDONED)
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Cancelled
+                drafts.draft shouldBe null
+                coordinator.lastError.value shouldBe null
+            }
+        }
+
         test("clear forgets everything, including the draft") {
             runTest {
                 val drafts = FakeDraftStore()
@@ -841,6 +888,87 @@ class SentenceTestCoordinatorTest : FunSpec({
                 coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
                 coordinator.onTextChanged("x")
                 coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
+            }
+        }
+    }
+
+    context("9. correction only in the test field") {
+        val own = "com.mvptesis.keyboard.debug"
+
+        test("without a test any editor may correct; with one, only the keyboard's own field while writing with help") {
+            runTest {
+                coordinator().correctionBlock("com.whatsapp", own) shouldBe null
+                coordinator().correctionBlock(null, own) shouldBe null
+                val coordinator = atSentence()
+                coordinator.correctionBlock(own, own) shouldBe EducationalMessages.CorrectionDisabledInSentence
+                coordinator.correctionBlock("com.whatsapp", own) shouldBe EducationalMessages.CorrectionOnlyInTestField
+                coordinator.pressStart()
+                advanceUntilIdle()
+                coordinator.correctionBlock(own, own) shouldBe null
+                coordinator.correctionBlock("com.whatsapp", own) shouldBe EducationalMessages.CorrectionOnlyInTestField
+                coordinator.correctionBlock(null, own) shouldBe EducationalMessages.CorrectionOnlyInTestField
+            }
+        }
+
+        test("an unassisted sentence is blocked in the own field with the sentence notice, elsewhere with the app notice") {
+            runTest {
+                val coordinator = writing(position = 2)
+                coordinator.correctionBlock(own, own) shouldBe EducationalMessages.CorrectionDisabledInSentence
+                coordinator.correctionBlock("com.whatsapp", own) shouldBe EducationalMessages.CorrectionOnlyInTestField
+            }
+        }
+    }
+
+    context("10. home entry") {
+        test("the home entry lists again from a terminal state so the pending count shows, never with the list loaded or a sentence in progress") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                api.finishResults += Result.success(finished(next = null))
+                val coordinator = writing(3, api)
+                coordinator.finish()
+                advanceUntilIdle()
+                coordinator.state.value.shouldBeInstanceOf<SentenceTestState.Completed>()
+
+                // Al volver al inicio sin pasar por "Volver al inicio" (otra actividad, atrás).
+                api.assignedResult = Result.success(listOf(assigned(status = "COMPLETED"), assigned().copy(testId = "test-2", code = "T2")))
+                val before = api.calls.count { it == "assigned" }
+                coordinator.loadTestsForHome()
+                coordinator.state.value shouldBe SentenceTestState.LoadingTests
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Choosing(api.assignedResult.getOrThrow())
+                api.calls.count { it == "assigned" } shouldBe before + 1
+
+                // Con la lista cargada no se vuelve a consultar.
+                coordinator.loadTestsForHome()
+                advanceUntilIdle()
+                api.calls.count { it == "assigned" } shouldBe before + 1
+
+                // Con una oración en curso tampoco.
+                coordinator.start(assigned().copy(testId = "test-2", code = "T2"))
+                advanceUntilIdle()
+                coordinator.inProgress() shouldBe true
+                coordinator.loadTestsForHome()
+                advanceUntilIdle()
+                api.calls.count { it == "assigned" } shouldBe before + 1
+                coordinator.inProgress() shouldBe true
+            }
+        }
+
+        test("the home entry retries after a failed listing and stays quiet while the list is loading") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                api.assignedResult = Result.failure(SocketTimeoutException("timeout"))
+                val coordinator = coordinator(api)
+                coordinator.loadTests()
+                advanceUntilIdle()
+                coordinator.state.value.shouldBeInstanceOf<SentenceTestState.Failed>()
+
+                api.assignedResult = Result.success(listOf(assigned()))
+                coordinator.loadTestsForHome()
+                coordinator.loadTestsForHome()
+                advanceUntilIdle()
+                coordinator.state.value shouldBe SentenceTestState.Choosing(listOf(assigned()))
+                api.calls.count { it == "assigned" } shouldBe 2
             }
         }
     }

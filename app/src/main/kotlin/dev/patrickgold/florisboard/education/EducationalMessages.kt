@@ -44,6 +44,11 @@ object EducationalMessages {
 
     // Pruebas de oraciones
     const val CorrectionDisabledInSentence = "La corrección está desactivada en esta oración"
+    /** Con una prueba en curso solo se corrige en el campo de la oración; en otra app se avisa. */
+    const val CorrectionOnlyInTestField = "Termina la prueba para usar la corrección en otras apps."
+    /** El backend ya cerró la oración (409 "Sentence is not open"): solo queda Terminar. */
+    const val SentenceClosed = "Esta oración ya se cerró. Toca Terminar."
+    const val TestNotAssigned = "Esta prueba no está asignada a tu cuenta."
     const val TestsTitle = "Pruebas"
     const val TestsEmpty = "No tienes pruebas pendientes."
     const val TestsLoading = "Buscando tus pruebas…"
@@ -51,7 +56,8 @@ object EducationalMessages {
     const val TestStatusPending = "Pendiente"
     const val TestStatusInProgress = "En curso"
     const val TestStatusCompleted = "Completada"
-    const val TestStartQuestion = "¿Comenzar la prueba %s? Tu profesor te dirá qué escribir."
+    const val TestStartQuestion = "¿Comenzar la prueba %s?"
+    const val TestStartHint = "Tu profesor te dirá qué escribir."
     const val TestStart = "Comenzar prueba"
     const val TestStarting = "Preparando la prueba…"
     const val TestInProgress = "Prueba en curso"
@@ -85,7 +91,14 @@ object EducationalMessages {
     const val LogoutDuringTest =
         "Tienes una prueba en curso. Si cierras sesión se perderá el texto que no se haya guardado."
 
-    fun testStartQuestion(title: String): String = TestStartQuestion.format(Locale.ROOT, title)
+    /** Pregunta del diálogo de inicio con el código de la prueba ("¿Comenzar la prueba PRUEBA-01?"). */
+    fun testStartQuestion(code: String): String = TestStartQuestion.format(Locale.ROOT, code)
+
+    /** Contador "n/5000" del campo de la oración; solo cerca del tope (desde 100 antes), null si no. */
+    fun sentenceLengthCounter(length: Int): String? =
+        if (length >= MaxSentenceLength - SentenceCounterMargin) "$length/$MaxSentenceLength" else null
+
+    private const val SentenceCounterMargin = 100
 
     fun sentenceProgress(position: Int, total: Int): String = SentenceProgress.format(Locale.ROOT, position, total)
 
@@ -173,12 +186,23 @@ object EducationalMessages {
         }
     }
 
+    /**
+     * Errores de la corrección. Dentro de una prueba el backend revalida lo que el teclado ya
+     * bloquea: 400 "A sentence test is in progress" (corrección desde otra app), 400
+     * "…disabled for this sentence" (oración sin ayuda) y 409 "Sentence is not open" (oración ya
+     * cerrada); si llegan, el texto dice qué hacer en vez de sugerir otro fragmento.
+     */
     fun correction(error: Throwable): String = when (error) {
         is EducationalHttpException -> when (error.status) {
-            400 -> "No pudimos corregir ese texto. Intenta con otro fragmento."
+            400 -> when {
+                error.bodyMentions("test is in progress") -> CorrectionOnlyInTestField
+                error.bodyMentions("disabled for this sentence") -> CorrectionDisabledInSentence
+                else -> "No pudimos corregir ese texto. Intenta con otro fragmento."
+            }
             401 -> SessionExpired
             403 -> "No tienes permiso para usar la corrección."
             404 -> "Esa corrección ya no está disponible. Sombrea y toca IA otra vez."
+            409 -> if (error.bodyMentions("not open")) SentenceClosed else "No se pudo corregir (código 409)."
             502 -> AiUnavailable
             else -> "No se pudo corregir (código ${error.status})."
         }
@@ -188,11 +212,13 @@ object EducationalMessages {
     /**
      * Errores de las pruebas de oraciones. Un 409 es un conflicto de estado de la prueba (otra en
      * curso, ya completada, oración fuera de orden…): el alumno no puede arreglarlo, avisa al
-     * profesor; un 404 es una prueba que ya no existe.
+     * profesor; un 404 es una prueba que ya no existe; un 403, una prueba (o un intento) que no
+     * es de este alumno.
      */
     fun sentenceTest(error: Throwable): String = when (error) {
         is EducationalHttpException -> when (error.status) {
             401 -> SessionExpired
+            403 -> TestNotAssigned
             404 -> "Esa prueba ya no está disponible."
             409 -> TestConflict
             in 500..599 -> "El servidor tuvo un problema. Inténtalo en unos minutos."
@@ -210,6 +236,8 @@ object EducationalMessages {
         is EducationalHttpException -> error.status == 502
         else -> error.isNetworkFailure()
     }
+
+    private fun EducationalHttpException.bodyMentions(fragment: String): Boolean = body.contains(fragment, ignoreCase = true)
 
     private fun Throwable.isNetworkFailure(): Boolean =
         this is ConnectException || this is NoRouteToHostException ||

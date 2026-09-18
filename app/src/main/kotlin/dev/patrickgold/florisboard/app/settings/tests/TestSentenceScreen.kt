@@ -54,11 +54,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.app.LocalNavController
 import dev.patrickgold.florisboard.education.AttemptCancelReason
 import dev.patrickgold.florisboard.education.EducationalCorrectionState
 import dev.patrickgold.florisboard.education.EducationalMessages
+import dev.patrickgold.florisboard.education.MaxSentenceLength
 import dev.patrickgold.florisboard.education.SentenceAssistance
 import dev.patrickgold.florisboard.education.SentenceTestState
 import dev.patrickgold.florisboard.educationalCorrectionManager
@@ -185,6 +187,8 @@ fun TestSentenceScreen() = FlorisScreen {
 /**
  * La oración: progreso grande, chip de condición, el campo (deshabilitado hasta Comenzar; pide
  * el foco al habilitarse para que el teclado aparezca solo), la acción principal y cancelar.
+ * El texto tiene el tope del backend ([MaxSentenceLength]): el coordinador recorta lo que sobre
+ * y, cerca del tope, el campo muestra un contador discreto ("4990/5000").
  */
 @Composable
 private fun SentenceCard(
@@ -230,6 +234,9 @@ private fun SentenceCard(
             .focusRequester(focusRequester),
         enabled = enabled,
         minLines = 3,
+        supportingText = EducationalMessages.sentenceLengthCounter(text.length)?.let { counter ->
+            { Text(counter, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.End) }
+        },
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.Sentences,
             keyboardType = KeyboardType.Text,

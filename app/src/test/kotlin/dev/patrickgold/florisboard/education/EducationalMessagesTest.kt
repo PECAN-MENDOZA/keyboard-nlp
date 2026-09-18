@@ -85,6 +85,18 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.correction(EducationalHttpException(418, "")) shouldBe
                 "No se pudo corregir (código 418)."
         }
+        test("inside a sentence test the backend rejections say where and when to correct") {
+            EducationalMessages.correction(EducationalHttpException(400, """{"message":"A sentence test is in progress"}""")) shouldBe
+                EducationalMessages.CorrectionOnlyInTestField
+            EducationalMessages.correction(
+                EducationalHttpException(400, """{"message":"Contextual correction is disabled for this sentence"}"""),
+            ) shouldBe EducationalMessages.CorrectionDisabledInSentence
+            EducationalMessages.correction(EducationalHttpException(409, """{"message":"Sentence is not open"}""")) shouldBe
+                EducationalMessages.SentenceClosed
+            EducationalMessages.correction(EducationalHttpException(409, "")) shouldBe "No se pudo corregir (código 409)."
+            EducationalMessages.CorrectionOnlyInTestField shouldBe "Termina la prueba para usar la corrección en otras apps."
+            EducationalMessages.SentenceClosed shouldBe "Esta oración ya se cerró. Toca Terminar."
+        }
     }
 
     context("sentence tests") {
@@ -94,6 +106,12 @@ class EducationalMessagesTest : FunSpec({
         test("404 means the test is gone") {
             EducationalMessages.sentenceTest(EducationalHttpException(404, "")) shouldBe
                 "Esa prueba ya no está disponible."
+        }
+        test("403 means the test or the attempt is not this student's") {
+            EducationalMessages.sentenceTest(EducationalHttpException(403, """{"message":"Test is not assigned to this student"}""")) shouldBe
+                "Esta prueba no está asignada a tu cuenta."
+            EducationalMessages.sentenceTest(EducationalHttpException(403, """{"message":"Attempt belongs to another student"}""")) shouldBe
+                EducationalMessages.TestNotAssigned
         }
         test("409 is a test state conflict the student cannot fix alone") {
             EducationalMessages.sentenceTest(EducationalHttpException(409, """{"message":"Another test is in progress"}""")) shouldBe
@@ -132,7 +150,8 @@ class EducationalMessagesTest : FunSpec({
                 EducationalMessages.CancelTestIntro, EducationalMessages.KeepGoing, EducationalMessages.Cancelling,
                 EducationalMessages.TestCompleted, EducationalMessages.TestCancelled, EducationalMessages.ClockLost,
                 EducationalMessages.BackHome, EducationalMessages.Back, EducationalMessages.LogoutDuringTest,
-                EducationalMessages.CorrectionDisabledInSentence,
+                EducationalMessages.CorrectionDisabledInSentence, EducationalMessages.CorrectionOnlyInTestField,
+                EducationalMessages.SentenceClosed, EducationalMessages.TestNotAssigned, EducationalMessages.TestStartHint,
             ).forEach { text -> text.isNotBlank() shouldBe true }
         }
         test("the fixed texts of the brief") {
@@ -158,9 +177,15 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.sentenceCount(1) shouldBe "1 oración"
             EducationalMessages.sentenceCount(3) shouldBe "3 oraciones"
         }
-        test("TestStartQuestion names the test") {
-            EducationalMessages.testStartQuestion("Dictado 1") shouldBe
-                "¿Comenzar la prueba Dictado 1? Tu profesor te dirá qué escribir."
+        test("TestStartQuestion names the test by its code; the hint goes apart") {
+            EducationalMessages.testStartQuestion("PRUEBA-01") shouldBe "¿Comenzar la prueba PRUEBA-01?"
+            EducationalMessages.TestStartHint shouldBe "Tu profesor te dirá qué escribir."
+        }
+        test("the length counter appears only near the 5000 limit") {
+            EducationalMessages.sentenceLengthCounter(0) shouldBe null
+            EducationalMessages.sentenceLengthCounter(4899) shouldBe null
+            EducationalMessages.sentenceLengthCounter(4900) shouldBe "4900/5000"
+            EducationalMessages.sentenceLengthCounter(5000) shouldBe "5000/5000"
         }
         test("the home button shows the pending count only when there is one") {
             EducationalMessages.testsWithPending(0) shouldBe "Pruebas"
@@ -231,6 +256,9 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.LogoutDuringTest, EducationalMessages.testsWithPending(0),
             EducationalMessages.testsWithPending(1), EducationalMessages.testsWithPending(2),
             EducationalMessages.testInProgress(2, 3), EducationalMessages.testStatusLabel("PENDING"),
+            EducationalMessages.CorrectionOnlyInTestField, EducationalMessages.SentenceClosed,
+            EducationalMessages.TestNotAssigned, EducationalMessages.TestStartHint,
+            EducationalMessages.sentenceLengthCounter(4950).orEmpty(),
         ) + SentenceAssistance.entries.map { EducationalMessages.assistanceLabel(it) } +
             AttemptCancelReason.entries.map { EducationalMessages.cancelReasonLabel(it) } +
             networkErrors.map { EducationalMessages.login(it) } +
