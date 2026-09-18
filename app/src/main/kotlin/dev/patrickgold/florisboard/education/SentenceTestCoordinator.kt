@@ -294,12 +294,14 @@ class SentenceTestCoordinator(
      * Terminar: congela el payload (offsets desde Comenzar, contadores, `skipped` con texto en
      * blanco) con la clave del borrador si ya había una (reintento tras reinicio) o una nueva,
      * la guarda en disco y envía. Texto no vacío sin primera tecla (no debería pasar) se mide
-     * desde Comenzar.
+     * desde Comenzar. [tappedAtElapsedMs] es el instante (`elapsedRealtime`) del toque en
+     * Terminar: quien llame más tarde (p. ej. tras vaciar la cola de feedback) lo pasa para que
+     * la duración de la oración no incluya esa espera.
      */
-    fun finish(): Unit = synchronized(lock) {
+    fun finish(tappedAtElapsedMs: Long = elapsedRealtime()): Unit = synchronized(lock) {
         if (busy) return
         val current = _state.value as? SentenceTestState.Writing ?: return
-        val now = elapsedRealtime()
+        val now = tappedAtElapsedMs
         val text = current.text
         val firstKey = current.firstKeyAtElapsedMs ?: current.pressedAtElapsedMs.takeIf { text.isNotEmpty() }
         val key = drafts.load()?.takeIf { it.matches(current) }?.completionKey ?: newCompletionKey()

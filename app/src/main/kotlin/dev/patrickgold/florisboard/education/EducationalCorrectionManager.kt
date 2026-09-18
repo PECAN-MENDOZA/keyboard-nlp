@@ -376,7 +376,8 @@ class EducationalCorrectionManager(context: Context) {
      * ANTES del `PUT …/responses/{position}`: el backend cierra el feedback de la oración al
      * terminarla y un `PATCH` tardío se perdería (400 "Feedback is closed"), dejando la sesión de
      * corrección sin decisión en el panel docente. Mientras se vacía la cola [finishing] es
-     * `true`; `finishedOffsetMs` se mide cuando la cola queda vacía (normalmente al instante).
+     * `true`; la duración de la oración (`finishedOffsetMs`) se mide en el toque, no al vaciarse
+     * la cola, así la latencia del feedback no la infla.
      */
     fun finishSentence() {
         if (_finishing.value) return
@@ -386,7 +387,8 @@ class EducationalCorrectionManager(context: Context) {
             is EducationalCorrectionState.EditingInPlace -> finishEdit()
             else -> reset()
         }
-        scope.launch { finishAfterFeedback(feedbackQueue, _finishing) { tests.finish() } }
+        val tappedAt = SystemClock.elapsedRealtime()
+        scope.launch { finishAfterFeedback(feedbackQueue, _finishing) { tests.finish(tappedAtElapsedMs = tappedAt) } }
     }
 
     /** Cierra avisos y errores; no interrumpe una petición en curso. */

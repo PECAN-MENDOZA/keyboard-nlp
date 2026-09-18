@@ -383,6 +383,23 @@ class SentenceTestCoordinatorTest : FunSpec({
             }
         }
 
+        test("finish invoked later than the tap measures the sentence up to the tap") {
+            runTest {
+                val api = FakeSentenceTestApi()
+                val clock = FakeClock(1_000)
+                val coordinator = writing(1, api, clock)
+                clock.value = 1_400
+                coordinator.onTextChanged("hola")
+                // El alumno tocó Terminar a los 3 000 ms; el feedback pendiente tardó hasta los 9 000.
+                clock.value = 9_000
+                coordinator.finish(tappedAtElapsedMs = 3_000)
+                advanceUntilIdle()
+                api.finished.single().finishedOffsetMs shouldBe 2_000
+                api.finished.single().firstKeyOffsetMs shouldBe 400
+                coordinator.state.value shouldBe SentenceTestState.AtSentence(attempt(next = 2), 2)
+            }
+        }
+
         test("text without a first key (should not happen) is measured from Comenzar") {
             runTest {
                 val api = FakeSentenceTestApi()
