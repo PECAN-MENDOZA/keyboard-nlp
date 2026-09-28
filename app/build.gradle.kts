@@ -15,6 +15,7 @@
  */
 
 import com.android.build.api.dsl.ApplicationExtension
+import java.util.Properties
 import org.gradle.api.tasks.testing.logging.TestLogEvent
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
@@ -39,6 +40,13 @@ val projectVersionNameSuffix = projectVersionName.substringAfter("-", "").let { 
     } else {
         suffix
     }
+}
+
+// Firma de release: keystore.properties en la raiz del repo (ignorado por git) con
+// storeFile, storePassword, keyAlias y keyPassword. Sin ese archivo el APK de release
+// se genera sin firmar, como antes.
+val releaseKeystoreProperties = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { file ->
+    Properties().apply { file.inputStream().use { load(it) } }
 }
 
 kotlin {
@@ -105,6 +113,17 @@ configure<ApplicationExtension> {
         compose = true
     }
 
+    signingConfigs {
+        if (releaseKeystoreProperties != null) {
+            create("release") {
+                storeFile = file(releaseKeystoreProperties.getProperty("storeFile"))
+                storePassword = releaseKeystoreProperties.getProperty("storePassword")
+                keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+                keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         named("debug") {
             applicationIdSuffix = ".debug"
@@ -131,6 +150,9 @@ configure<ApplicationExtension> {
 
         named("release") {
             versionNameSuffix = projectVersionNameSuffix
+            if (releaseKeystoreProperties != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
 
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isMinifyEnabled = true
