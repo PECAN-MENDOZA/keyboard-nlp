@@ -68,7 +68,7 @@ class EducationalMessagesTest : FunSpec({
         }
         test("404 asks to select again") {
             EducationalMessages.correction(EducationalHttpException(404, "")) shouldBe
-                "Esa corrección ya no está disponible. Sombrea y toca IA otra vez."
+                "Esa corrección ya no está disponible. Sombrea y toca la varita mágica otra vez."
         }
         test("502 and network failures are the same short message and retryable") {
             (networkErrors + EducationalHttpException(502, "")).forEach { error ->

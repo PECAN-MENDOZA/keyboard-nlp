@@ -32,10 +32,10 @@ object EducationalMessages {
     const val NoSession = "Inicia sesión en la app del teclado para usar la corrección."
     const val SessionExpired = "Tu sesión terminó. Abre la app del teclado para iniciar sesión."
     const val AiUnavailable = "Sin conexión con la IA."
-    const val SelectFirst = "Sombrea el texto que quieres corregir y toca IA."
+    const val SelectFirst = "Sombrea el texto que quieres corregir y toca la varita mágica."
     const val NotAllowedHere = "Aquí no se puede usar la corrección."
     const val AppNotSupported = "Esta app no permite corregir. Prueba en otra."
-    const val TextChanged = "El texto cambió. Sombrea y toca IA otra vez."
+    const val TextChanged = "El texto cambió. Sombrea y toca la varita mágica otra vez."
     const val AlreadyCorrect = "Tu texto ya está bien escrito"
     const val Processing = "Revisando tu texto…"
     const val ProcessingSlow = "La primera vez tarda más"
@@ -155,7 +155,7 @@ object EducationalMessages {
     const val HowToTitle = "Cómo corregir"
     const val HowTo1 = "1. Escribe en cualquier app."
     const val HowTo2 = "2. Sombrea el texto con el dedo."
-    const val HowTo3 = "3. Toca el botón IA del teclado."
+    const val HowTo3 = "3. Toca la varita mágica del teclado."
     // Globos
     const val OtherOption = "Otra opción"
     const val EditChip = "✎ Editar"
@@ -201,7 +201,7 @@ object EducationalMessages {
             }
             401 -> SessionExpired
             403 -> "No tienes permiso para usar la corrección."
-            404 -> "Esa corrección ya no está disponible. Sombrea y toca IA otra vez."
+            404 -> "Esa corrección ya no está disponible. Sombrea y toca la varita mágica otra vez."
             409 -> if (error.bodyMentions("not open")) SentenceClosed else "No se pudo corregir (código 409)."
             502 -> AiUnavailable
             else -> "No se pudo corregir (código ${error.status})."
