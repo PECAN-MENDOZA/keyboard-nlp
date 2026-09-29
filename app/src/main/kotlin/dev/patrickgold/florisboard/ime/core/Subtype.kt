@@ -58,18 +58,20 @@ data class Subtype(
 ) {
     companion object {
         /**
-         * Subtype to use when prefs do not contain any valid subtypes.
+         * Subtype to use when prefs do not contain any valid subtypes. Espanol de
+         * Latinoamerica (preset es-419: distribucion "spanish" con ñ) porque el teclado
+         * es para estudiantes de primaria hispanohablantes; FlorisBoard trae en-US.
          */
         val DEFAULT = Subtype(
             id = -1,
-            primaryLocale = FlorisLocale.from("en", "US"),
+            primaryLocale = FlorisLocale.fromTag("es-419"),
             secondaryLocales = emptyList(),
             nlpProviders = SubtypeNlpProviderMap(),
             composer = extCoreComposer("appender"),
             currencySet = extCoreCurrencySet("dollar"),
             punctuationRule = extCorePunctuationRule("default"),
-            popupMapping = extCorePopupMapping("en"),
-            layoutMap = SubtypeLayoutMap(characters = extCoreLayout("qwerty")),
+            popupMapping = extCorePopupMapping("es"),
+            layoutMap = SubtypeLayoutMap(characters = extCoreLayout("spanish")),
         )
     }
 
