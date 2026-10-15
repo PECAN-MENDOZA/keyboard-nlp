@@ -25,4 +25,19 @@ class EducationalApiRepositoryTest : FunSpec({
         error.body shouldBe """{"message":"Sentence already finished"}"""
         error.message shouldBe """HTTP 409: {"message":"Sentence already finished"}"""
     }
+
+    test("the session check fails only on 401 or when the server does not answer properly") {
+        EducationalApiRepository.isReachableWithSession(401) shouldBe false
+        EducationalApiRepository.isReachableWithSession(403) shouldBe true
+        EducationalApiRepository.isReachableWithSession(404) shouldBe true
+        EducationalApiRepository.isReachableWithSession(500) shouldBe false
+        EducationalApiRepository.isReachableWithSession(502) shouldBe false
+    }
+
+    test("only a 401 means the backend rejected the student's session") {
+        EducationalHttpException(401, "").isSessionRejected() shouldBe true
+        EducationalHttpException(403, "").isSessionRejected() shouldBe false
+        EducationalHttpException(429, "").isSessionRejected() shouldBe false
+        java.net.ConnectException("x").isSessionRejected() shouldBe false
+    }
 })

@@ -111,15 +111,16 @@ fun TypingScreen() = FlorisScreen {
             if (isAutoSpacePunctuationEnabled) {
                 Card(modifier = Modifier.padding(8.dp)) {
                     Column(modifier = Modifier.padding(8.dp)) {
+                        // Texto fijo de FlorisBoard (no está en strings.xml): traducido aquí.
                         Text(
                             text = """
-                                Auto-space after punctuation is an experimental feature which may break or behave
-                                unexpectedly. If you want, please give feedback about it in below linked feedback
-                                thread. This helps a lot in improving this feature. Thanks!
+                                El espacio automático tras la puntuación es una función experimental y puede
+                                fallar o comportarse de forma inesperada. Si quieres, deja tus comentarios en el
+                                hilo de abajo (en inglés). ¡Gracias!
                             """.trimIndent().replace('\n', ' '),
                         )
                         FlorisHyperlinkText(
-                            text = "Feedback thread (GitHub)",
+                            text = "Hilo de comentarios (GitHub)",
                             url = "https://github.com/florisboard/florisboard/discussions/1935",
                         )
                     }

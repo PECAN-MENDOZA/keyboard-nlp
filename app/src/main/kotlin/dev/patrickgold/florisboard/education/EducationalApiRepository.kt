@@ -210,6 +210,28 @@ class EducationalApiRepository {
         }
     }
 
+    /**
+     * `GET /students/me` con el token del alumno: comprueba a la vez que el servidor responde y
+     * que la sesión sigue valiendo. Un 401 (alumno dado de baja, PIN reiniciado, token vencido) se
+     * propaga; cualquier otro 4xx también demuestra que el servidor está ahí y cuenta como éxito.
+     */
+    suspend fun checkStudentSession(baseUrl: String, token: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            try {
+                request(
+                    baseUrl = baseUrl,
+                    path = "/students/me",
+                    method = "GET",
+                    token = token,
+                    body = null,
+                )
+            } catch (error: EducationalHttpException) {
+                if (!isReachableWithSession(error.status)) throw error
+            }
+            Unit
+        }
+    }
+
     private fun request(
         baseUrl: String,
         path: String,
@@ -268,6 +290,9 @@ class EducationalApiRepository {
         private const val ReadTimeoutMs = 90_000
         private const val ApiVersionPath = "/api/v1"
         private val ReachableUnauthorizedStatuses = setOf(401, 403)
+
+        /** Respuesta de `GET /students/me` que no es fallo de la comprobación: 4xx salvo 401. */
+        internal fun isReachableWithSession(status: Int): Boolean = status in 400..499 && status != 401
     }
 }
 

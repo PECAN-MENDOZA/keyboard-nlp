@@ -58,4 +58,19 @@ class LoginFlow(
     fun reset() {
         if (_state.value !is LoginState.Loading) _state.value = LoginState.Idle
     }
+
+    /**
+     * El backend rechazó la sesión guardada (401): el login vuelve a mostrarse con el aviso de
+     * sesión terminada en vez de vacío. Un login en curso no se pisa.
+     */
+    fun sessionEnded() {
+        if (_state.value !is LoginState.Loading) _state.value = LoginState.Failed(EducationalMessages.SessionEnded)
+    }
+
+    companion object {
+        const val PinLength = 4
+
+        /** Lo que admite el campo PIN: solo dígitos y como máximo [PinLength]. */
+        fun sanitizePin(input: String): String = input.filter { it in '0'..'9' }.take(PinLength)
+    }
 }

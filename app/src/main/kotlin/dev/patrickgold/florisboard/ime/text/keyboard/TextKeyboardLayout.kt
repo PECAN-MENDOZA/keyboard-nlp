@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.toSize
 import dev.patrickgold.florisboard.FlorisImeService
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.editorInstance
+import dev.patrickgold.florisboard.education.AccessibilityPreset
 import dev.patrickgold.florisboard.glideTypingManager
 import dev.patrickgold.florisboard.ime.editor.OperationScope
 import dev.patrickgold.florisboard.ime.editor.OperationUnit
@@ -341,10 +342,15 @@ private fun TextKeyButton(
             .absoluteOffset { key.visibleBounds.topLeft.toIntOffset() },
     ) {
         val isTelPadKey = key.computedData.type == KeyType.NUMERIC && evaluator.keyboard.mode == KeyboardMode.PHONE
+        // Teclas grandes: las etiquetas largas y el número/símbolo de la esquina quedan en su tamaño
+        // normal y la letra baja un poco si hay esquina (ver AccessibilityPreset). Sin Teclas
+        // grandes todo queda como en FlorisBoard.
+        val prefs by FlorisPreferenceStore
+        val bigKeys by prefs.accessibility.bigKeys.collectAsState()
+        val labelBias = AccessibilityPreset.keyLabelVerticalBias(bigKeys, hasHint = !key.hintedLabel.isNullOrEmpty())
         key.label?.let { label ->
             var customLabel = label
             if (key.computedData.code == KeyCode.SPACE) {
-                val prefs by FlorisPreferenceStore
                 val spaceBarMode by prefs.keyboard.spaceBarMode.collectAsState()
                 when (spaceBarMode) {
                     SpaceBarMode.NOTHING -> return@let
@@ -355,7 +361,8 @@ private fun TextKeyButton(
             SnyggText(
                 modifier = Modifier
                     .wrapContentSize()
-                    .align(if (isTelPadKey) BiasAlignment(-0.5f, 0f) else Alignment.Center),
+                    .align(if (isTelPadKey) BiasAlignment(-0.5f, 0f) else BiasAlignment(0f, labelBias)),
+                fontScale = AccessibilityPreset.keyLabelFontFactor(customLabel, bigKeys),
                 text = customLabel,
             )
         }
@@ -367,6 +374,7 @@ private fun TextKeyButton(
                 modifier = Modifier
                     .wrapContentSize()
                     .align(if (isTelPadKey) BiasAlignment(0.5f, 0f) else Alignment.TopEnd),
+                fontScale = AccessibilityPreset.keyHintFontFactor(bigKeys),
                 text = hintedLabel,
             )
         }

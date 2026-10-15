@@ -36,6 +36,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
+import dev.patrickgold.florisboard.BuildConfig
 import dev.patrickgold.florisboard.app.ext.CheckUpdatesScreen
 import dev.patrickgold.florisboard.app.ext.ExtensionEditScreen
 import dev.patrickgold.florisboard.app.ext.ExtensionExportScreen
@@ -255,8 +256,10 @@ object Routes {
 
             composableWithDeepLink(Settings.Home::class) { StudentHomeScreen() }
             composableWithDeepLink(Settings.KeyboardSettings::class) { KeyboardSettingsScreen() }
-            composableWithDeepLink(Settings.Tests::class) { TestsScreen() }
-            composableWithDeepLink(Settings.TestSentence::class) { TestSentenceScreen() }
+            if (BuildConfig.FEATURE_SENTENCE_TESTS) {
+                composableWithDeepLink(Settings.Tests::class) { TestsScreen() }
+                composableWithDeepLink(Settings.TestSentence::class) { TestSentenceScreen() }
+            }
 
             composableWithDeepLink(Settings.Localization::class) { LocalizationScreen() }
             composableWithDeepLink(Settings.SelectLocale::class) { SelectLocaleScreen() }

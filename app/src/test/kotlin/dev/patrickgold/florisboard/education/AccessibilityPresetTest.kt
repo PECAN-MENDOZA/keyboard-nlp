@@ -18,6 +18,7 @@ package dev.patrickgold.florisboard.education
 
 import androidx.compose.ui.unit.dp
 import io.kotest.core.spec.style.FunSpec
+import io.kotest.matchers.floats.plusOrMinus
 import io.kotest.matchers.shouldBe
 
 class AccessibilityPresetTest : FunSpec({
@@ -43,5 +44,29 @@ class AccessibilityPresetTest : FunSpec({
 
     test("row height is clamped to the maximum") {
         AccessibilityPreset.effectiveRowHeight(100.dp, bigKeys = true) shouldBe 110.dp
+    }
+
+    test("without big keys key texts keep the FlorisBoard size and position") {
+        AccessibilityPreset.keyLabelFontFactor("?123", bigKeys = false) shouldBe 1f
+        AccessibilityPreset.keyLabelFontFactor("a", bigKeys = false) shouldBe 1f
+        AccessibilityPreset.keyHintFontFactor(bigKeys = false) shouldBe 1f
+        AccessibilityPreset.keyLabelVerticalBias(bigKeys = false, hasHint = true) shouldBe 0f
+    }
+
+    test("with big keys only single-character labels grow; wide labels go back to normal size") {
+        AccessibilityPreset.keyLabelFontFactor("a", bigKeys = true) shouldBe 1f
+        AccessibilityPreset.keyLabelFontFactor("ñ", bigKeys = true) shouldBe 1f
+        val normal = AccessibilityPreset.effectiveFontScale(1f, bigKeys = true) *
+            AccessibilityPreset.keyLabelFontFactor("?123", bigKeys = true)
+        normal shouldBe (1f plusOrMinus 0.0001f)
+        AccessibilityPreset.keyLabelFontFactor("ABC", bigKeys = true) shouldBe
+            AccessibilityPreset.keyLabelFontFactor("?123", bigKeys = true)
+    }
+
+    test("with big keys the corner hint keeps its normal size and the letter moves down only if there is one") {
+        (AccessibilityPreset.effectiveFontScale(1f, bigKeys = true) * AccessibilityPreset.keyHintFontFactor(bigKeys = true)) shouldBe
+            (1f plusOrMinus 0.0001f)
+        (AccessibilityPreset.keyLabelVerticalBias(bigKeys = true, hasHint = true) > 0f) shouldBe true
+        AccessibilityPreset.keyLabelVerticalBias(bigKeys = true, hasHint = false) shouldBe 0f
     }
 })

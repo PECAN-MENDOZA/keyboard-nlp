@@ -41,4 +41,30 @@ object AccessibilityPreset {
         val scaled = if (bigKeys) base * BIG_KEYS_HEIGHT_FACTOR else base
         return scaled.coerceAtMost(MAX_ROW_HEIGHT)
     }
+
+    /**
+     * Factor extra para la etiqueta principal de una tecla. Teclas grandes agranda la fuente de
+     * todo el teclado pero no el ancho de las teclas: una etiqueta de varios caracteres ("?123",
+     * "ABC", el idioma de la barra espaciadora) ya no cabía y se cortaba ("?"). Esas vuelven a su
+     * tamaño normal (el mismo que sin Teclas grandes, que sí cabe); solo crece la letra o símbolo
+     * único.
+     */
+    fun keyLabelFontFactor(label: String, bigKeys: Boolean): Float =
+        if (bigKeys && label.codePointCount(0, label.length) > 1) 1f / BIG_KEYS_FONT_FACTOR else 1f
+
+    /**
+     * Factor extra para el número o símbolo pequeño de la esquina: con Teclas grandes se queda
+     * en su tamaño normal para no pisar la letra agrandada.
+     */
+    fun keyHintFontFactor(bigKeys: Boolean): Float = if (bigKeys) 1f / BIG_KEYS_FONT_FACTOR else 1f
+
+    /**
+     * Desplazamiento vertical (sesgo de alineación, -1 arriba … 1 abajo) de la letra principal.
+     * Con Teclas grandes y un número/símbolo en la esquina superior, la letra baja un poco para
+     * dejarle sitio; sin Teclas grandes o sin esquina queda centrada como en FlorisBoard.
+     */
+    fun keyLabelVerticalBias(bigKeys: Boolean, hasHint: Boolean): Float =
+        if (bigKeys && hasHint) BIG_KEYS_LABEL_BIAS else 0f
+
+    private const val BIG_KEYS_LABEL_BIAS = 0.35f
 }

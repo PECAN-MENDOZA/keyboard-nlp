@@ -145,7 +145,7 @@
     <string name="settings__localization__suggested_subtype_presets_none_found" comment="Suggested presets none found">No hay preajustes sugeridos disponibles. Use el botón de abajo para ver todos los preajustes de subtipo.</string>
     <string name="settings__localization__subtype_presets" comment="Subtype presets dialog title">Preajustes de subtipo</string>
     <string name="settings__localization__subtype_presets_view_all" comment="View all presets button">Mostrar todos</string>
-    <string name="settings__localization__subtype_no_subtypes_configured_warning" comment="Warning message that no subtype has been defined">Parece que no has configurado ningún subtipo. ¡Como alternativa se usará el subtipo Inglés/QWERTY!</string>
+    <string name="settings__localization__subtype_no_subtypes_configured_warning" comment="Warning message that no subtype has been defined">Parece que no has configurado ningún subtipo. Se usará el subtipo por defecto: español (Latinoamérica).</string>
     <string name="settings__localization__subtype_error_already_exists" comment="Error message shown in subtype dialog when a subtype to add already exists">¡Este subtipo ya existe!</string>
     <string name="settings__localization__subtype_error_fields_no_value" comment="Error message shown in subtype editor if at least one field is set to '- select -' (means no value specified)">Al menos un campo no posee un valor seleccionado. Por favor escoja un valor para el(los) campo(s).</string>
     <string name="settings__localization__subtype_error_layout_not_installed" comment="Error message shown in subtype list when a layout is not installed, where %s will be replaced by the layout ID">{layout_id} (no instalado)</string>
@@ -407,6 +407,7 @@
     <string name="pref__keyboard__font_size_multiplier__label" comment="Preference title">Multiplicador del tamaño de fuente</string>
     <string name="pref__keyboard__group_layout__label" comment="Preference group title">Distribución</string>
     <string name="pref__keyboard__landscape_input_ui_mode__label" comment="Preference value">Entrada a pantalla completa horizontal</string>
+    <string name="pref__keyboard__key_spacing__label" comment="Preference title">Espacio entre teclas</string>
     <string name="pref__keyboard__group_keypress__label" comment="Preference group title">Presionar tecla</string>
     <string name="pref__keyboard__popup_enabled__label" comment="Preference title">Visibilidad de las teclas emergentes</string>
     <string name="pref__keyboard__popup_enabled__summary" comment="Preference summary">Mostrar emergente al pulsar una tecla</string>
@@ -442,7 +443,9 @@
     <string name="pref__suggestion__enabled__summary" comment="Preference summary">Muestra sugerencias mientras escribe</string>
     <string name="pref__suggestion__display_mode__label" comment="Preference title">Modo de visualización de sugerencias</string>
     <string name="pref__suggestion__block_possibly_offensive__label" comment="Preference title">Bloquear posibles palabras ofensivas</string>
-    <string name="pref__suggestion__api30_inline_suggestions_enabled__summary" comment="Preference summary">Muestra sugerencias inline ofrecidas por servicios de autocompletado</string>
+    <string name="pref__suggestion__block_possibly_offensive__summary" comment="Preference summary">Evita que se sugieran palabras posiblemente ofensivas mientras escribes</string>
+    <string name="pref__suggestion__api30_inline_suggestions_enabled__label" comment="Preference title">Sugerencias de autocompletado del sistema</string>
+    <string name="pref__suggestion__api30_inline_suggestions_enabled__summary" comment="Preference summary">Muestra en la barra las sugerencias de los servicios de autocompletado</string>
     <string name="pref__suggestion__incognito_mode__label" comment="Label of Incognito mode preference in Typing">Modo incógnito</string>
     <string name="pref__correction__title" comment="Preference group title">Correcciones</string>
     <string name="pref__correction__auto_capitalization__label" comment="Preference title">Mayúsculas automáticas</string>
@@ -1006,6 +1009,7 @@
     <string name="enum__swipe_action__switch_to_prev_subtype" comment="Enum value label">Cambiar a subtipo anterior</string>
     <string name="enum__swipe_action__switch_to_next_subtype" comment="Enum value label">Cambiar al subtipo siguiente</string>
     <string name="enum__swipe_action__toggle_smartbar_visibility" comment="Enum value label">Alternar visibilidad de la barra inteligente</string>
+    <string name="enum__swipe_action__toggle_compact_layout" comment="Enum value label">Alternar distribución compacta</string>
     <string name="enum__theme_mode__always_day" comment="Enum value label">Siempre claro</string>
     <string name="enum__theme_mode__always_night" comment="Enum value label">Siempre oscuro</string>
     <string name="enum__theme_mode__follow_system" comment="Enum value label">De acuerdo al sistema</string>

@@ -78,7 +78,7 @@ class EducationalCorrectionManager(context: Context) {
             persistSession(newSession)
             // Una prueba en curso (o una oración a medias en el borrador) sigue ahí; lo que fuera
             // de otra cuenta en el mismo teléfono lo descarta el propio resume().
-            tests.resume()
+            if (BuildConfig.FEATURE_SENTENCE_TESTS) tests.resume()
         },
     )
     val loginState: StateFlow<LoginState> = loginFlow.state
@@ -99,7 +99,7 @@ class EducationalCorrectionManager(context: Context) {
         appVersion = BuildConfig.VERSION_NAME,
         drafts = PrefsSentenceTestDraftStore(appContext),
         bootId = { PrefsSentenceTestDraftStore.bootId(appContext) },
-        onSessionRejected = { clearSession() },
+        onSessionRejected = { endSession() },
     )
 
     init {
@@ -108,7 +108,7 @@ class EducationalCorrectionManager(context: Context) {
             editorInstance.activeContentFlow.collect { content -> onContentChanged(content) }
         }
         // Tras una muerte del proceso, el gate y las pantallas deben reflejar la prueba en curso.
-        if (currentSession() != null) tests.resume()
+        if (BuildConfig.FEATURE_SENTENCE_TESTS && currentSession() != null) tests.resume()
     }
 
     private fun loadValidSession(): EducationalSession? {
@@ -133,6 +133,16 @@ class EducationalCorrectionManager(context: Context) {
         _session.value = null
     }
 
+    /**
+     * El backend rechazó la sesión (401: token vencido, alumno dado de baja o PIN reiniciado):
+     * se borra la local y el inicio muestra el login con el aviso de sesión terminada.
+     */
+    private fun endSession() {
+        clearSession()
+        loginFlow.sessionEnded()
+        _connectionState.value = EducationalBackendConnectionState.Unknown
+    }
+
     fun login(username: String, pin: String) = loginFlow.submit(username, pin)
 
     fun logout() {
@@ -143,16 +153,32 @@ class EducationalCorrectionManager(context: Context) {
         _connectionState.value = EducationalBackendConnectionState.Unknown
     }
 
+    /**
+     * Con sesión, la tarjeta de conexión pregunta `GET /students/me` con el token: así un alumno
+     * dado de baja o con el PIN reiniciado ve el login (401) en vez de "Conectado". Sin sesión
+     * basta el health-check.
+     */
     fun checkBackendConnection() {
         _connectionState.value = EducationalBackendConnectionState.Checking
+        val session = currentSession()
         scope.launch {
             val result = EducationalBackendBaseUrls.firstSuccessfulBaseUrl { baseUrl ->
-                repository.checkHealth(baseUrl = baseUrl)
+                if (session != null) {
+                    repository.checkStudentSession(baseUrl = baseUrl, token = session.token)
+                } else {
+                    repository.checkHealth(baseUrl = baseUrl)
+                }
             }
             result.onSuccess { baseUrl ->
                 _connectionState.value = EducationalBackendConnectionState.Connected(baseUrl)
             }.onFailure { error ->
-                _connectionState.value = EducationalBackendConnectionState.Unavailable(EducationalMessages.login(error))
+                if (session != null && error.isSessionRejected()) {
+                    // Solo si la sesión rechazada sigue siendo la actual: si mientras tanto se cerró
+                    // y se inició otra, esa ya lanzó su propia comprobación.
+                    if (_session.value == session) endSession()
+                } else {
+                    _connectionState.value = EducationalBackendConnectionState.Unavailable(EducationalMessages.login(error))
+                }
             }
         }
     }
@@ -291,9 +317,7 @@ class EducationalCorrectionManager(context: Context) {
                     show(EducationalCorrectionState.ShowingSuggestions(extractedText, response))
                 }
             }.onFailure { error ->
-                if (error is EducationalHttpException && error.status == 401) {
-                    clearSession()
-                }
+                if (error.isSessionRejected()) endSession()
                 val retry = if (EducationalMessages.isRetryable(error)) extractedText else null
                 show(EducationalCorrectionState.Error(EducationalMessages.correction(error), retryText = retry))
             }
@@ -513,6 +537,9 @@ class EducationalCorrectionManager(context: Context) {
 }
 
 private const val PREWARM_DEBOUNCE_MS = 2 * 60 * 1000L // 2 minutos
+
+/** 401 del backend a una petición con el token del alumno: la sesión ya no vale. */
+internal fun Throwable.isSessionRejected(): Boolean = this is EducationalHttpException && status == 401
 
 /**
  * Secuencia de Terminar, sin Android para probarla en JVM: marca [finishing], espera a que

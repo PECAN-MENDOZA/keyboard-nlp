@@ -549,6 +549,11 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
             key = "localization__subtypes",
             default = "[]",
         )
+        // Si ya se agregó Subtype.DEFAULT a la lista vacía (una sola vez, ver SubtypeManager).
+        val defaultSubtypeSeeded = boolean(
+            key = "localization__default_subtype_seeded",
+            default = false,
+        )
     }
 
     val other = Other()

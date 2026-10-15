@@ -58,11 +58,13 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.patrickgold.florisboard.BuildConfig
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.LocalNavController
 import dev.patrickgold.florisboard.app.Routes
 import dev.patrickgold.florisboard.education.EducationalBackendConnectionState
 import dev.patrickgold.florisboard.education.EducationalMessages
+import dev.patrickgold.florisboard.education.LoginFlow
 import dev.patrickgold.florisboard.education.LoginState
 import dev.patrickgold.florisboard.education.SentenceTestState
 import dev.patrickgold.florisboard.education.currentSentence
@@ -214,7 +216,8 @@ private fun LoginSection(
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = pin,
-            onValueChange = { pin = it },
+            // Solo dígitos y como máximo 4 (también al pegar).
+            onValueChange = { pin = LoginFlow.sanitizePin(it) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             enabled = !isLoading,
@@ -271,7 +274,7 @@ private fun AccountSection(
         // hace falta consultar: en frío, con la reanudación en vuelo (publica la lista al
         // terminar) o tras un estado terminal que no pasó por "Volver al inicio"; con la lista
         // ya cargada o una oración en curso no vuelve a consultar.
-        onLoadTests()
+        if (BuildConfig.FEATURE_SENTENCE_TESTS) onLoadTests()
     }
     Column(
         modifier = Modifier
@@ -313,10 +316,11 @@ private fun AccountSection(
                 Text(EducationalMessages.HowTo3)
             }
         }
-        Spacer(Modifier.height(12.dp))
         // Solo con sesión válida: las pruebas exigen cuenta de alumno. Con una oración por
         // resolver el botón lleva directo a ella; si no, a la lista (con las pendientes en
         // cuanto el coordinador las tiene).
+        if (!BuildConfig.FEATURE_SENTENCE_TESTS) return@Column
+        Spacer(Modifier.height(12.dp))
         val sentence = testState.currentSentence()
         val testsLabel = when {
             sentence != null -> EducationalMessages.testInProgress(sentence.first, sentence.second)

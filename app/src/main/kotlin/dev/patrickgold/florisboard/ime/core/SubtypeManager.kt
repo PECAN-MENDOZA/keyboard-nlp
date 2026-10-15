@@ -18,6 +18,7 @@ package dev.patrickgold.florisboard.ime.core
 
 import android.content.Context
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.appContext
 import dev.patrickgold.florisboard.ime.keyboard.CurrencySet
 import dev.patrickgold.florisboard.keyboardManager
 import dev.patrickgold.florisboard.lib.FlorisLocale
@@ -26,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import org.florisboard.lib.kotlin.collectLatestIn
@@ -42,6 +44,7 @@ val SubtypeJsonConfig = Json {
  */
 class SubtypeManager(context: Context) {
     private val prefs by FlorisPreferenceStore
+    private val appContext by context.appContext()
     private val keyboardManager by context.keyboardManager()
     private val scope = CoroutineScope(Dispatchers.Default)
 
@@ -68,6 +71,26 @@ class SubtypeManager(context: Context) {
             subtypes = list
             evaluateActiveSubtype(list)
         }
+        scope.launch { seedDefaultSubtype() }
+    }
+
+    /**
+     * Una instalación nueva no trae subtipos: el teclado usa [Subtype.DEFAULT] (es-419), pero
+     * Ajustes → Idiomas mostraba la lista vacía con el aviso de "se usará Inglés/QWERTY". Se agrega
+     * el subtipo por defecto a la lista una sola vez, tras cargar las preferencias (antes de eso
+     * la lista leída es la de por defecto y se pisarían los subtipos guardados). Si luego el
+     * usuario borra todos, no se vuelve a agregar.
+     */
+    private suspend fun seedDefaultSubtype() {
+        appContext.preferenceStoreLoaded.first { it }
+        if (prefs.localization.defaultSubtypeSeeded.get()) return
+        val listRaw = prefs.localization.subtypes.get()
+        val list = if (listRaw.isNotBlank()) SubtypeJsonConfig.decodeFromString<List<Subtype>>(listRaw) else emptyList()
+        if (list.isEmpty()) {
+            val seeded = Subtype.DEFAULT.copy(id = System.currentTimeMillis())
+            prefs.localization.subtypes.set(SubtypeJsonConfig.encodeToString(listOf(seeded)))
+        }
+        prefs.localization.defaultSubtypeSeeded.set(true)
     }
 
     private fun persistNewSubtypeList(list: List<Subtype>) = scope.launch {

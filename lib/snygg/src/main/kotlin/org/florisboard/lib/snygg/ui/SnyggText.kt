@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isSpecified
 import androidx.compose.ui.unit.sp
 import org.florisboard.lib.snygg.SnyggQueryAttributes
 import org.florisboard.lib.snygg.SnyggSelector
@@ -51,6 +52,9 @@ val LocalSnyggForcedFontFamily = compositionLocalOf<FontFamily?> { null }
  * @param modifier The modifier to be applied to the Text.
  * @param maxLines If non-null, overrides the stylesheet's `text-max-lines` for this text. Use
  *   [Int.MAX_VALUE] to let long content wrap freely instead of being truncated to the theme's limit.
+ * @param fontScale Extra factor applied on top of the stylesheet's font size (already multiplied by the
+ *   theme's font size multiplier) for this text only. Used by the big keys accessibility option to keep
+ *   wide labels and key hints at their normal size.
  * @param text The text of the element.
  *
  * @since 0.5.0-alpha01
@@ -64,6 +68,7 @@ fun SnyggText(
     selector: SnyggSelector? = null,
     modifier: Modifier = Modifier,
     maxLines: Int? = null,
+    fontScale: Float = 1f,
     text: String,
 ) {
     ProvideSnyggStyle(elementName, attributes, selector) { style ->
@@ -76,7 +81,7 @@ fun SnyggText(
                 .snyggPadding(style),
             text = text,
             color = style.foreground(),
-            fontSize = style.fontSize(),
+            fontSize = style.fontSize().let { if (fontScale != 1f && it.isSpecified) it * fontScale else it },
             fontStyle = style.fontStyle(),
             fontWeight = style.fontWeight(),
             fontFamily = LocalSnyggForcedFontFamily.current

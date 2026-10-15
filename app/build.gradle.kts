@@ -91,6 +91,9 @@ configure<ApplicationExtension> {
             "EDUCATION_BACKEND_BASE_URL",
             "\"https://backend-o4kvbijcma-uc.a.run.app/api/v1\"",
         )
+        // Pruebas de oraciones (módulo del piloto): apagado. Debe coincidir con
+        // app.features.sentence-tests del backend, que sin él responde 404.
+        buildConfigField("boolean", "FEATURE_SENTENCE_TESTS", "false")
 
         sourceSets {
             maybeCreate("main").apply {

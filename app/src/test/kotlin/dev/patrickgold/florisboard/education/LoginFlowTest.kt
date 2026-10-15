@@ -86,6 +86,36 @@ class LoginFlowTest : FunSpec({
         }
     }
 
+    test("a rejected session shows the login with the session-ended notice") {
+        val flow = LoginFlow(TestScope(), authenticate = { _, _ -> Result.success(session) }, onSuccess = {})
+        flow.sessionEnded()
+        flow.state.value shouldBe LoginState.Failed("Tu sesión terminó. Vuelve a iniciar sesión.")
+        flow.reset()
+        flow.state.value shouldBe LoginState.Idle
+    }
+
+    test("the session-ended notice never interrupts a login in progress") {
+        runTest(StandardTestDispatcher()) {
+            val gate = CompletableDeferred<Result<EducationalSession>>()
+            val flow = LoginFlow(this, authenticate = { _, _ -> gate.await() }, onSuccess = {})
+            flow.submit("student_001", "1234")
+            testScheduler.runCurrent()
+            flow.sessionEnded()
+            flow.state.value.shouldBeInstanceOf<LoginState.Loading>()
+            gate.complete(Result.success(session))
+            advanceUntilIdle()
+            flow.state.value shouldBe LoginState.Idle
+        }
+    }
+
+    test("the PIN field keeps only digits, at most four") {
+        LoginFlow.sanitizePin("1234") shouldBe "1234"
+        LoginFlow.sanitizePin("12345") shouldBe "1234"
+        LoginFlow.sanitizePin("1a2-3 4") shouldBe "1234"
+        LoginFlow.sanitizePin("abc") shouldBe ""
+        LoginFlow.sanitizePin("١٢") shouldBe ""
+    }
+
     test("username is trimmed before authenticating") {
         runTest {
             var seen = ""

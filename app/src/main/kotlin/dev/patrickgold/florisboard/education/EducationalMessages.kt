@@ -31,6 +31,10 @@ object EducationalMessages {
     const val EmptyCredentials = "Escribe tu alias y tu PIN."
     const val NoSession = "Inicia sesión en la app del teclado para usar la corrección."
     const val SessionExpired = "Tu sesión terminó. Abre la app del teclado para iniciar sesión."
+    /** Aviso del login de la app cuando el backend cerró la sesión (401: dado de baja, PIN reiniciado…). */
+    const val SessionEnded = "Tu sesión terminó. Vuelve a iniciar sesión."
+    /** 429 del login: el backend bloquea el alias 15 min tras 5 intentos fallidos. */
+    const val TooManyAttempts = "Demasiados intentos. Espera 15 minutos o pide ayuda a tu docente."
     const val AiUnavailable = "Sin conexión con la IA."
     const val SelectFirst = "Sombrea el texto que quieres corregir y toca la varita mágica."
     const val NotAllowedHere = "Aquí no se puede usar la corrección."
@@ -175,6 +179,7 @@ object EducationalMessages {
     fun login(error: Throwable): String = when (error) {
         is EducationalHttpException -> when (error.status) {
             401, 403 -> "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
+            429 -> TooManyAttempts
             in 500..599 -> "El servidor tuvo un problema. Inténtalo en unos minutos."
             else -> "No se pudo iniciar sesión (código ${error.status})."
         }
