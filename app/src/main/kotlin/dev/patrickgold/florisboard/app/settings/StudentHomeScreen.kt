@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -212,6 +213,13 @@ private fun LoginSection(
             singleLine = true,
             enabled = !isLoading,
             label = { Text(EducationalMessages.AliasLabel) },
+            // Los alias van en minúsculas: sin mayúscula automática ni autocorrección del teclado.
+            keyboardOptions = KeyboardOptions(
+                capitalization = KeyboardCapitalization.None,
+                autoCorrectEnabled = false,
+                keyboardType = KeyboardType.Ascii,
+                imeAction = ImeAction.Next,
+            ),
         )
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(

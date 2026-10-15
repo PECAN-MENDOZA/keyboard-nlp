@@ -39,6 +39,18 @@ class LoginFlowTest : FunSpec({
         }
     }
 
+    test("the alias is sent trimmed and in lowercase (the phone capitalizes the first letter)") {
+        runTest {
+            var sent: String? = null
+            val flow = LoginFlow(this, authenticate = { user, _ -> sent = user; Result.success(session) }, onSuccess = {})
+
+            flow.submit(" Conejo-59 ", "1234")
+            advanceUntilIdle()
+
+            sent shouldBe "conejo-59"
+        }
+    }
+
     test("failure maps the error with the login catalogue") {
         runTest {
             val flow = LoginFlow(this, authenticate = { _, _ -> Result.failure(EducationalHttpException(401, "")) }, onSuccess = {})

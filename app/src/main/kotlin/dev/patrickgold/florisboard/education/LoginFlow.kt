@@ -36,7 +36,8 @@ class LoginFlow(
 
     fun submit(username: String, pin: String) {
         if (_state.value is LoginState.Loading) return
-        val user = username.trim()
+        // El backend compara sin distinguir mayúsculas; se envía igual normalizado.
+        val user = username.trim().lowercase()
         if (user.isEmpty() || pin.isBlank()) {
             _state.value = LoginState.Failed(EducationalMessages.EmptyCredentials)
             return
