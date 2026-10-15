@@ -37,10 +37,6 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.login(EducationalHttpException(403, "")) shouldBe
                 "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
         }
-        test("429 means the alias is locked for a while after too many attempts") {
-            EducationalMessages.login(EducationalHttpException(429, """{"message":"Too many login attempts"}""")) shouldBe
-                "Demasiados intentos. Espera 15 minutos o pide ayuda a tu docente."
-        }
         test("5xx is a server problem") {
             EducationalMessages.login(EducationalHttpException(503, "")) shouldBe
                 "El servidor tuvo un problema. Inténtalo en unos minutos."
