@@ -7,7 +7,6 @@
   [
     { "code": -202, "label": "view_symbols", "type": "system_gui" },
     { "code": -227, "label": "language_switch", "type": "system_gui" },
-    { "code": -212, "label": "ime_ui_mode_media", "type": "system_gui" },
     { "code":   32, "label": "space" },
     { "$": "variation_selector",
       "default":  { "code":   44, "label": ",", "groupId": 1,

@@ -465,7 +465,8 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
         )
         val utilityKeyAction = enum(
             key = "keyboard__utility_key_action",
-            default = UtilityKeyAction.DYNAMIC_SWITCH_LANGUAGE_EMOJIS,
+            // Sin panel de emojis (recorte): la tecla cambia de idioma y solo aparece con 2+ idiomas.
+            default = UtilityKeyAction.SWITCH_LANGUAGE,
         )
         val spaceBarMode = enum(
             key = "keyboard__space_bar_display_mode",

@@ -629,20 +629,12 @@ private val ENUM_DISPLAY_ENTRIES = mapOf<Pair<KClass<*>, String>, @Composable ()
     UtilityKeyAction::class to DEFAULT to {
         listPrefEntries {
             entry(
-                key = UtilityKeyAction.SWITCH_TO_EMOJIS,
-                label = stringRes(R.string.enum__utility_key_action__switch_to_emojis),
-            )
-            entry(
                 key = UtilityKeyAction.SWITCH_LANGUAGE,
                 label = stringRes(R.string.enum__utility_key_action__switch_language),
             )
             entry(
                 key = UtilityKeyAction.SWITCH_KEYBOARD_APP,
                 label = stringRes(R.string.enum__utility_key_action__switch_keyboard_app),
-            )
-            entry(
-                key = UtilityKeyAction.DYNAMIC_SWITCH_LANGUAGE_EMOJIS,
-                label = stringRes(R.string.enum__utility_key_action__dynamic_switch_language_emojis),
             )
         }
     },

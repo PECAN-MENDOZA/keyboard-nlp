@@ -467,6 +467,7 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
     private fun handleLanguageSwitch() {
         when (prefs.keyboard.utilityKeyAction.get()) {
             UtilityKeyAction.DYNAMIC_SWITCH_LANGUAGE_EMOJIS,
+            UtilityKeyAction.SWITCH_TO_EMOJIS,
             UtilityKeyAction.SWITCH_LANGUAGE -> subtypeManager.switchToNextSubtype()
             else -> FlorisImeService.switchToNextInputMethod()
         }
@@ -996,11 +997,13 @@ class KeyboardManager(context: Context) : InputKeyEventReceiver {
                         prefs.keyboard.utilityKeyEnabled.get() -> prefs.keyboard.utilityKeyAction.get()
                         else -> UtilityKeyAction.DISABLED
                     }
+                    // Las acciones de emojis (valores guardados de versiones anteriores) cuentan como
+                    // "cambiar idioma": el globo solo aparece si hay más de un idioma al que cambiar.
                     when (tempUtilityKeyAction) {
-                        UtilityKeyAction.DISABLED,
-                        UtilityKeyAction.SWITCH_TO_EMOJIS -> false
-                        UtilityKeyAction.SWITCH_LANGUAGE,
+                        UtilityKeyAction.DISABLED -> false
                         UtilityKeyAction.SWITCH_KEYBOARD_APP -> true
+                        UtilityKeyAction.SWITCH_LANGUAGE,
+                        UtilityKeyAction.SWITCH_TO_EMOJIS,
                         UtilityKeyAction.DYNAMIC_SWITCH_LANGUAGE_EMOJIS -> shouldShowLanguageSwitch()
                     }
                 }

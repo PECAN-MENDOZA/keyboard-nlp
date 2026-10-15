@@ -24,10 +24,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -95,23 +93,13 @@ fun AboutScreen() = FlorisScreen {
                 }
             },
         )
-        Preference(
-            icon = Icons.Default.History,
-            title = stringRes(R.string.about__changelog__title),
-            summary = stringRes(R.string.about__changelog__summary),
-            onClick = { context.launchUrl(R.string.florisboard__changelog_url, "version" to BuildConfig.VERSION_NAME) },
-        )
+        // Sin registro de cambios ni política de privacidad de FlorisBoard: describen otra app (la
+        // política dice que no se envían datos, y este teclado envía el texto a corregir al servidor).
         Preference(
             icon = Icons.Default.Code,
             title = stringRes(R.string.about__repository__title),
             summary = stringRes(R.string.about__repository__summary),
             onClick = { context.launchUrl(R.string.florisboard__repo_url) },
-        )
-        Preference(
-            icon = Icons.Outlined.Policy,
-            title = stringRes(R.string.about__privacy_policy__title),
-            summary = stringRes(R.string.about__privacy_policy__summary),
-            onClick = { context.launchUrl(R.string.florisboard__privacy_policy_url) },
         )
         Preference(
             icon = Icons.Outlined.Description,

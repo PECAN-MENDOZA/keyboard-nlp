@@ -389,10 +389,10 @@
     <string name="pref__input_feedback__haptic_feat_key_repeated_action__label" comment="Preference title">Vibración al presionar repetidamente</string>
     <string name="pref__input_feedback__haptic_feat_gesture_swipe__label" comment="Preference title">Vibración de gestos deslizantes</string>
     <string name="pref__input_feedback__haptic_feat_gesture_moving_swipe__label" comment="Preference title">Vibración de gestos deslizantes con movimiento</string>
-    <string name="pref__input_feedback__any_feat_key_press__summary" comment="Preference summary">ej. teclas, botones, pestañas de emojis</string>
+    <string name="pref__input_feedback__any_feat_key_press__summary" comment="Preference summary">ej. teclas y botones</string>
     <string name="pref__input_feedback__any_feat_key_long_press__summary" comment="Preference summary">ej. menú emergente</string>
     <string name="pref__input_feedback__any_feat_key_repeated_action__summary" comment="Preference summary">ej. tecla borrar</string>
-    <string name="pref__input_feedback__any_feat_gesture_swipe__summary" comment="Preference summary">sin implemetar</string>
+    <string name="pref__input_feedback__any_feat_gesture_swipe__summary" comment="Preference summary">sin implementar</string>
     <string name="pref__input_feedback__any_feat_gesture_moving_swipe__summary" comment="Preference summary">ej. control de deslizamiento del cursor</string>
     <string name="settings__keyboard__title" comment="Title of Keyboard preferences screen">Teclado</string>
     <string name="pref__keyboard__number_row__label" comment="Preference title">Fila de números</string>
@@ -543,8 +543,8 @@
     <string name="about__version_copied__error" comment="Title of the error toast for copying the version string">Algo salió mal: {error_message}</string>
     <string name="about__changelog__title" comment="Preference title">Registro de cambios</string>
     <string name="about__changelog__summary" comment="Preference summary">Qué hay de nuevo</string>
-    <string name="about__repository__title" comment="Preference title">Repositorio (GitHub)</string>
-    <string name="about__repository__summary" comment="Preference summary">Código fuente, discusiones, problemas e informaciones</string>
+    <string name="about__repository__title" comment="Preference title">Basado en FlorisBoard</string>
+    <string name="about__repository__summary" comment="Preference summary">Código fuente del teclado original (GitHub)</string>
     <string name="about__privacy_policy__title" comment="Preference title">Política de privacidad</string>
     <string name="about__privacy_policy__summary" comment="Preference summary">La política de privacidad para este proyecto</string>
     <string name="about__project_license__title" comment="Preference title">Licencia del proyecto</string>
@@ -869,7 +869,7 @@
     <string name="enum__candidates_display_mode__classic" comment="Enum value label">Clásico (3 columnas)</string>
     <string name="enum__candidates_display_mode__dynamic" comment="Enum value label">Ancho dinámico</string>
     <string name="enum__candidates_display_mode__dynamic_scrollable" comment="Enum value label">Ancho dinámico &amp; desplazable</string>
-    <string name="enum__capitalization_behavior__capslock_by_double_tap" comment="Enum value label">Permitr Bloq May haciendo doble toque en mayúscula</string>
+    <string name="enum__capitalization_behavior__capslock_by_double_tap" comment="Enum value label">Permitir Bloq Mayús con doble toque en Mayús</string>
     <string name="enum__capitalization_behavior__capslock_by_cycle" comment="Enum value label">Cambiar modo de capitalización cada vez que se pulsa la tecla Mayús</string>
     <string name="enum__clipboard_sync_behavior__no_events" comment="Enum value label">Sin eventos</string>
     <string name="enum__clipboard_sync_behavior__no_events__description" comment="Enum value description">No se sincronizan eventos en esta dirección. En este modo, la sincronización excluye el contenido del texto.</string>
