@@ -37,6 +37,12 @@ class EducationalMessagesTest : FunSpec({
             EducationalMessages.login(EducationalHttpException(403, "")) shouldBe
                 "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
         }
+        test("401 of a deactivated account with the right PIN says so; other 401s stay generic") {
+            EducationalMessages.login(EducationalHttpException(401, """{"message":"Student account is deactivated"}""")) shouldBe
+                "Tu cuenta fue dada de baja. Habla con tu docente."
+            EducationalMessages.login(EducationalHttpException(401, """{"message":"Invalid student credentials"}""")) shouldBe
+                "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
+        }
         test("5xx is a server problem") {
             EducationalMessages.login(EducationalHttpException(503, "")) shouldBe
                 "El servidor tuvo un problema. Inténtalo en unos minutos."

@@ -32,6 +32,9 @@ object EducationalMessages {
     const val NoSession = "Inicia sesión en la app del teclado para usar la corrección."
     const val SessionExpired = "Tu sesión terminó. Abre la app del teclado para iniciar sesión."
     /** Aviso del login de la app cuando el backend cerró la sesión (401: dado de baja, PIN reiniciado…). */
+    /** Login con el PIN correcto de una cuenta dada de baja (o cuyo docente fue dado de baja). */
+    const val AccountDeactivated = "Tu cuenta fue dada de baja. Habla con tu docente."
+    private const val STUDENT_DEACTIVATED = "Student account is deactivated"
     const val SessionEnded = "Tu sesión terminó. Vuelve a iniciar sesión."
     const val AiUnavailable = "Sin conexión con la IA."
     const val SelectFirst = "Sombrea el texto que quieres corregir y toca la varita mágica."
@@ -176,7 +179,12 @@ object EducationalMessages {
 
     fun login(error: Throwable): String = when (error) {
         is EducationalHttpException -> when (error.status) {
-            401, 403 -> "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
+            401, 403 -> if (error.status == 401 && error.body.contains(STUDENT_DEACTIVATED)) {
+                // El backend solo revela la baja si el PIN era correcto (si no, "incorrectos").
+                AccountDeactivated
+            } else {
+                "Alias o PIN incorrectos. Revisa los datos que te dio tu docente."
+            }
             in 500..599 -> "El servidor tuvo un problema. Inténtalo en unos minutos."
             else -> "No se pudo iniciar sesión (código ${error.status})."
         }
