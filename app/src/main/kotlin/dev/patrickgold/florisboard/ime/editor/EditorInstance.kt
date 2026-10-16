@@ -438,7 +438,7 @@ class EditorInstance(context: Context) : AbstractEditorInstance(context) {
         if (text != null) {
             clipboardManager.addNewPlaintext(text.toString())
         } else {
-            appContext.showShortToastSync("Failed to retrieve selected text requested to cut: Eiter selection state is invalid or an error occurred within the input connection.")
+            appContext.showShortToastSync("Primero sombrea el texto que quieres cortar.")
         }
         return deleteBackwards(OperationUnit.CHARACTERS)
     }
@@ -456,7 +456,7 @@ class EditorInstance(context: Context) : AbstractEditorInstance(context) {
         if (text != null) {
             clipboardManager.addNewPlaintext(text.toString())
         } else {
-            appContext.showShortToastSync("Failed to retrieve selected text requested to copy: Eiter selection state is invalid or an error occurred within the input connection.")
+            appContext.showShortToastSync("Primero sombrea el texto que quieres copiar.")
         }
         val activeSelection = activeContent.selection
         return setSelection(activeSelection.end, activeSelection.end)
@@ -473,7 +473,7 @@ class EditorInstance(context: Context) : AbstractEditorInstance(context) {
         phantomSpace.setInactive()
         return commitClipboardItem(clipboardManager.primaryClip).also { result ->
             if (!result) {
-                appContext.showShortToastSync("Failed to paste item.")
+                appContext.showShortToastSync("No hay nada para pegar.")
             }
         }
     }

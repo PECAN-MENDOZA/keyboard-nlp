@@ -67,7 +67,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import org.florisboard.lib.android.AndroidInternalR
 import org.florisboard.lib.android.AndroidVersion
-import org.florisboard.lib.android.showShortToastSync
+import org.florisboard.lib.android.showLongToastSync
 import org.florisboard.lib.android.systemServiceOrNull
 import org.florisboard.lib.kotlin.collectIn
 import org.florisboard.lib.kotlin.collectLatestIn
@@ -251,7 +251,7 @@ class FlorisImeService : LifecycleInputMethodService() {
                 }
             }
         }
-        showShortToastSync("Failed to find voice IME, do you have one installed?")
+        showLongToastSync("Este teléfono no tiene dictado por voz instalado.")
         return false
     }
 

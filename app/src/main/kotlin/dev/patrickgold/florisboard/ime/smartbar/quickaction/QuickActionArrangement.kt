@@ -66,7 +66,8 @@ data class QuickActionArrangement(
 
     companion object {
         val Default = QuickActionArrangement(
-            stickyAction = QuickAction.InsertKey(TextKeyData.VOICE_INPUT),
+            // Sin micrófono: el dictado cambia a otro teclado y el alumno pierde la varita.
+            stickyAction = null,
             dynamicActions = listOf(
                 QuickAction.InsertKey(TextKeyData.UNDO),
                 QuickAction.InsertKey(TextKeyData.REDO),
@@ -74,8 +75,8 @@ data class QuickActionArrangement(
                 QuickAction.InsertKey(TextKeyData.TOGGLE_FLOATING_WINDOW),
                 QuickAction.InsertKey(TextKeyData.TOGGLE_RESIZE_MODE),
                 QuickAction.InsertKey(TextKeyData.TOGGLE_COMPACT_LAYOUT),
-                QuickAction.InsertKey(TextKeyData.TOGGLE_AUTOCORRECT),
-                QuickAction.InsertKey(TextKeyData.TOGGLE_INCOGNITO_MODE),
+                // Sin "Autocorregir": en FlorisBoard es un marcador sin implementar.
+                // Sin "Incógnito": en incógnito la varita no corrige (privacidad) y el alumno no lo sabría.
                 QuickAction.InsertKey(TextKeyData.ARROW_UP),
                 QuickAction.InsertKey(TextKeyData.ARROW_DOWN),
                 QuickAction.InsertKey(TextKeyData.ARROW_LEFT),

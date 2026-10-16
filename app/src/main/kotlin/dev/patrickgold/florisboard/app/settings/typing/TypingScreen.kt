@@ -25,17 +25,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.unit.dp
 import dev.patrickgold.florisboard.R
-import dev.patrickgold.florisboard.app.enumDisplayEntriesOf
-import dev.patrickgold.florisboard.ime.keyboard.IncognitoMode
 import dev.patrickgold.florisboard.lib.compose.FlorisHyperlinkText
 import dev.patrickgold.florisboard.lib.compose.FlorisScreen
 import dev.patrickgold.jetpref.datastore.model.collectAsState
 import dev.patrickgold.jetpref.datastore.ui.ExperimentalJetPrefDatastoreUi
-import dev.patrickgold.jetpref.datastore.ui.ListPreference
 import dev.patrickgold.jetpref.datastore.ui.PreferenceGroup
 import dev.patrickgold.jetpref.datastore.ui.SwitchPreference
 import org.florisboard.lib.android.AndroidVersion
@@ -57,12 +52,7 @@ fun TypingScreen() = FlorisScreen {
                 summary = stringRes(R.string.pref__suggestion__api30_inline_suggestions_enabled__summary),
                 visibleIf = { AndroidVersion.ATLEAST_API30_R },
             )
-            ListPreference(
-                prefs.suggestion.incognitoMode,
-                icon = ImageVector.vectorResource(id = R.drawable.ic_incognito),
-                title = stringRes(R.string.pref__suggestion__incognito_mode__label),
-                entries = enumDisplayEntriesOf(IncognitoMode::class),
-            )
+            // Sin "Modo incógnito" forzado: en incógnito la varita no corrige (privacidad del campo).
         }
 
         PreferenceGroup(title = stringRes(R.string.pref__correction__title)) {

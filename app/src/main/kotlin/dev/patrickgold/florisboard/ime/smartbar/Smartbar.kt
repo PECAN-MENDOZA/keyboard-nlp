@@ -308,7 +308,7 @@ private fun SmartbarMainRow(modifier: Modifier = Modifier) {
             } else {
                 SnyggIcon(
                     imageVector = Icons.Default.AutoFixHigh,
-                    contentDescription = "Corregir con IA",
+                    contentDescription = "Varita mágica: corregir el texto sombreado",
                 )
             }
         }

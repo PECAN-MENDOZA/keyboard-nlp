@@ -1,10 +1,7 @@
 {
   "all": {
     "~enter": {
-      "main": { "code": -213, "label": "ime_ui_mode_clipboard", "type": "system_gui"},
-      "relevant": [
-        { "code": -112, "label": "compact_layout_to_right", "type": "system_gui" }
-      ]
+      "main": { "code": -112, "label": "compact_layout_to_right", "type": "system_gui" }
     },
     "~left": {
       "main": { "code": -301, "label": "settings", "type": "system_gui" },
