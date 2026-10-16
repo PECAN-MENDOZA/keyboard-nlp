@@ -137,7 +137,7 @@ object EducationalMessages {
     }
 
     // App
-    const val AppTitle = "Teclado adaptativo"
+    const val AppTitle = "Keyboard NLP"
     const val LoginIntro = "Inicia sesión para usar la corrección con IA."
     const val AliasLabel = "Alias"
     const val PinLabel = "PIN"
